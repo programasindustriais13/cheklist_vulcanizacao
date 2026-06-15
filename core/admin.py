@@ -1,0 +1,36 @@
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from .models import User, Machine, ChecklistSession, ChecklistTimelineLog, ChecklistItemValue
+
+class CustomUserAdmin(UserAdmin):
+    fieldsets = UserAdmin.fieldsets + (
+        (None, {'fields': ('specialty',)}),
+    )
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        (None, {'fields': ('specialty',)}),
+    )
+    list_display = ('username', 'email', 'specialty', 'is_staff')
+
+class MachineAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description')
+    search_fields = ('name',)
+
+class ChecklistSessionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'machine', 'inspector', 'leader', 'status', 'created_at')
+    list_filter = ('status', 'machine', 'inspector')
+    search_fields = ('leader__username', 'leader__first_name', 'leader__last_name')
+
+class ChecklistTimelineLogAdmin(admin.ModelAdmin):
+    list_display = ('session', 'user', 'action', 'timestamp')
+    list_filter = ('action', 'user')
+
+class ChecklistItemValueAdmin(admin.ModelAdmin):
+    list_display = ('session', 'section', 'item_name', 'status')
+    list_filter = ('section', 'status')
+    search_fields = ('item_name',)
+
+admin.site.register(User, CustomUserAdmin)
+admin.site.register(Machine, MachineAdmin)
+admin.site.register(ChecklistSession, ChecklistSessionAdmin)
+admin.site.register(ChecklistTimelineLog, ChecklistTimelineLogAdmin)
+admin.site.register(ChecklistItemValue, ChecklistItemValueAdmin)

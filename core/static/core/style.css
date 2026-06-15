@@ -1,0 +1,263 @@
+/* Google Fonts - Inter */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --primary: hsl(210, 80%, 45%);
+    --primary-hover: hsl(210, 80%, 38%);
+    --accent: hsl(145, 63%, 42%);
+    --accent-hover: hsl(145, 63%, 35%);
+    --danger: hsl(354, 70%, 54%);
+    --danger-hover: hsl(354, 70%, 46%);
+    --warning: hsl(38, 92%, 50%);
+    --bg-main: #f8fafc;
+    --bg-card: #ffffff;
+    --border-color: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--primary) !important;
+}
+
+.nav-link {
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+    color: var(--primary);
+}
+
+/* Custom premium card design */
+.premium-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.premium-card.hover-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.card-title-premium {
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 0.75rem;
+}
+
+/* Custom button styles */
+.btn-primary-custom {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+    font-weight: 500;
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-primary-custom:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    transform: translateY(-1px);
+}
+
+.btn-secondary-custom {
+    background-color: #fff;
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 500;
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-secondary-custom:hover {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+}
+
+/* Form Styling */
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Status Badges */
+.badge-status {
+    padding: 0.35em 0.65em;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-completed {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.badge-progress {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.badge-paused {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.badge-notstarted {
+    background-color: #f1f5f9;
+    color: #475569;
+}
+
+/* Custom Table Design */
+.table-premium {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-premium th {
+    background-color: #f8fafc;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.table-premium td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.table-premium tr:last-child td {
+    border-bottom: none;
+}
+
+/* Checklist Execution Table styling */
+.section-header-row {
+    background-color: #f1f5f9;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.item-row {
+    transition: background-color 0.15s ease;
+}
+
+.item-row:hover {
+    background-color: #f8fafc;
+}
+
+/* Premium checklist item state inputs */
+.status-radio-group {
+    display: inline-flex;
+    gap: 0.5rem;
+    background-color: #f1f5f9;
+    padding: 0.25rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.btn-radio {
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.35rem 1rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    user-select: none;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+input[type="radio"] {
+    display: none;
+}
+
+input[type="radio"]:disabled + .btn-radio {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Interactive styles for radio labels */
+input[type="radio"][value="C"]:checked + .btn-radio {
+    background-color: #10b981;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+input[type="radio"][value="NC"]:checked + .btn-radio {
+    background-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+/* Textarea warning class */
+.textarea-warning {
+    border-color: #f59e0b !important;
+    background-color: #fffbeb !important;
+}
+
+.textarea-danger {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15) !important;
+}
+
+/* Micro-animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease forwards;
+}
+
+.badge-nc-list {
+    display: inline-block;
+    background-color: #fee2e2;
+    color: #991b1b;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    margin: 0.1rem;
+    font-weight: 500;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Login/Register Screens Container */
+.auth-container {
+    max-width: 480px;
+    margin: 4rem auto;
+}

@@ -1,0 +1,398 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Dashboard Histórico - Checklist System{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center animate-fade-in">
+    <div class="col-md-6">
+        <h2 class="fw-bold mb-1">
+            <i class="bi bi-speedometer2 text-primary me-2"></i> Painel de Checklists
+        </h2>
+        <p class="text-muted mb-0">Monitore, continue ou exporte auditorias de início de turno</p>
+    </div>
+    <div class="col-md-6 text-md-end mt-3 mt-md-0">
+        {% if user.can_export_excel %}
+        <a href="{% url 'export_dashboard_excel' %}" class="btn btn-outline-success shadow-sm me-2">
+            <i class="bi bi-file-earmark-excel me-1"></i> Exportar Histórico (Excel)
+        </a>
+        {% endif %}
+        {% if user.can_create_checklist %}
+        <a href="{% url 'checklist_start' %}" class="btn btn-primary-custom shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> Iniciar Inspeção
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Pending Leader Approvals Queue -->
+{% if pending_leader %}
+<div class="card premium-card border-0 shadow-sm mb-4 border-start border-info border-4 animate-fade-in">
+    <div class="card-header bg-white py-3">
+        <h5 class="fw-bold mb-0 text-info"><i class="bi bi-hourglass-split me-2"></i>Checklists Pendentes de Aprovação (Líder)</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 80px;">ID</th>
+                        <th>Data</th>
+                        <th>Máquina</th>
+                        <th>Inspetor</th>
+                        <th>Líder de Turno</th>
+                        <th>Não Conformidades</th>
+                        <th class="text-center" style="width: 280px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in pending_leader %}
+                    <tr>
+                        <td class="text-center fw-semibold text-muted">#{{ session.id }}</td>
+                        <td>{{ session.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="fw-semibold text-dark">{{ session.machine.name }}</td>
+                        <td>{{ session.inspector.username }}</td>
+                        <td class="text-secondary fw-medium">{% if session.leader %}{{ session.leader.get_full_name|default:session.leader.username }}{% else %}-{% endif %}</td>
+                        <td>
+                            {% if session.nc_list %}
+                                <div class="d-flex flex-wrap">
+                                    {% for nc in session.nc_list %}
+                                        <span class="badge-nc-list" title="{{ nc }}">{{ nc }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 py-1 px-2 small">
+                                    <i class="bi bi-check-lg me-1"></i> Nenhuma
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex gap-2 justify-content-center">
+                                <a href="{% url 'checklist_execute' session.id %}" class="btn btn-sm btn-outline-primary" title="Visualizar">
+                                    <i class="bi bi-eye"></i> Revisar
+                                </a>
+                                <form action="{% url 'leader_decision' session.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" name="decision" value="approve" class="btn btn-sm btn-success">
+                                        <i class="bi bi-check-lg"></i> Aprovar
+                                    </button>
+                                </form>
+                                <form action="{% url 'leader_decision' session.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" name="decision" value="reject" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-x-lg"></i> Reprovar
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Pending Analyst Approvals Queue -->
+{% if pending_analyst %}
+<div class="card premium-card border-0 shadow-sm mb-4 border-start border-warning border-4 animate-fade-in">
+    <div class="card-header bg-white py-3">
+        <h5 class="fw-bold mb-0 text-warning"><i class="bi bi-exclamation-triangle me-2"></i>Checklists Reprovados pelo Líder (Aguardando Analista)</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 80px;">ID</th>
+                        <th>Data</th>
+                        <th>Máquina</th>
+                        <th>Inspetor</th>
+                        <th>Líder de Turno</th>
+                        <th>Não Conformidades</th>
+                        <th class="text-center" style="width: 300px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in pending_analyst %}
+                    <tr>
+                        <td class="text-center fw-semibold text-muted">#{{ session.id }}</td>
+                        <td>{{ session.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="fw-semibold text-dark">{{ session.machine.name }}</td>
+                        <td>{{ session.inspector.username }}</td>
+                        <td class="text-secondary fw-medium">{% if session.leader %}{{ session.leader.get_full_name|default:session.leader.username }}{% else %}-{% endif %}</td>
+                        <td>
+                            {% if session.nc_list %}
+                                <div class="d-flex flex-wrap">
+                                    {% for nc in session.nc_list %}
+                                        <span class="badge-nc-list" title="{{ nc }}">{{ nc }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 py-1 px-2 small">
+                                    <i class="bi bi-check-lg me-1"></i> Nenhuma
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex gap-2 justify-content-center">
+                                <a href="{% url 'checklist_execute' session.id %}" class="btn btn-sm btn-outline-primary" title="Visualizar">
+                                    <i class="bi bi-eye"></i> Revisar
+                                </a>
+                                <form action="{% url 'analyst_decision' session.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" name="decision" value="approve" class="btn btn-sm btn-success">
+                                        <i class="bi bi-check-lg"></i> Aprovar (Sobrescrever)
+                                    </button>
+                                </form>
+                                <form action="{% url 'analyst_decision' session.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" name="decision" value="reject" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Devolver Técnico
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Pending Technician Corrections Queue -->
+{% if pending_corrections %}
+<div class="card premium-card border-0 shadow-sm mb-4 border-start border-danger border-4 animate-fade-in">
+    <div class="card-header bg-white py-3">
+        <h5 class="fw-bold mb-0 text-danger"><i class="bi bi-arrow-counterclockwise me-2"></i>Ajustes Necessários (Checklists Reprovados)</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-premium mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 80px;">ID</th>
+                        <th>Data</th>
+                        <th>Máquina</th>
+                        <th>Líder de Turno</th>
+                        <th>Não Conformidades</th>
+                        <th class="text-center" style="width: 250px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in pending_corrections %}
+                    <tr>
+                        <td class="text-center fw-semibold text-danger">#{{ session.id }}</td>
+                        <td>{{ session.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="fw-semibold text-dark">{{ session.machine.name }}</td>
+                        <td class="text-secondary fw-medium">{% if session.leader %}{{ session.leader.get_full_name|default:session.leader.username }}{% else %}-{% endif %}</td>
+                        <td>
+                            {% if session.nc_list %}
+                                <div class="d-flex flex-wrap">
+                                    {% for nc in session.nc_list %}
+                                        <span class="badge-nc-list" title="{{ nc }}">{{ nc }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 py-1 px-2 small">
+                                    <i class="bi bi-check-lg me-1"></i> Nenhuma
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex gap-2 justify-content-center">
+                                <a href="{% url 'checklist_execute' session.id %}" class="btn btn-sm btn-outline-danger" title="Visualizar Motivos">
+                                    <i class="bi bi-eye"></i> Ver Motivo
+                                </a>
+                                <form action="{% url 'checklist_reopen' session.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-arrow-repeat"></i> Reabrir e Ajustar
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Statistics Cards -->
+<div class="row g-3 mb-4 animate-fade-in">
+    <div class="col-md-6 col-lg-3">
+        <div class="card premium-card border-0 shadow-sm p-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-primary bg-opacity-10 text-primary rounded-3 p-3 me-3">
+                    <i class="bi bi-clipboard-data fs-3"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted mb-0 small text-uppercase fw-semibold">Total de Checklists</h6>
+                    <h3 class="fw-bold mb-0 text-dark">{{ sessions|length }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card premium-card border-0 shadow-sm p-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-success bg-opacity-10 text-success rounded-3 p-3 me-3">
+                    <i class="bi bi-clipboard-check fs-3"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted mb-0 small text-uppercase fw-semibold">Aprovados</h6>
+                    <h3 class="fw-bold mb-0 text-dark">
+                        {% regroup sessions by status as status_list %}
+                        {% for group in status_list %}
+                            {% if group.grouper == 'APROVADO' %}{{ group.list|length }}{% endif %}
+                        {% empty %}
+                            0
+                        {% endfor %}
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card premium-card border-0 shadow-sm p-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-warning bg-opacity-10 text-warning rounded-3 p-3 me-3">
+                    <i class="bi bi-hourglass-split fs-3"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted mb-0 small text-uppercase fw-semibold">Ativos / Em Andamento</h6>
+                    <h3 class="fw-bold mb-0 text-dark">
+                        {{ active_count }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card premium-card border-0 shadow-sm p-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-danger bg-opacity-10 text-danger rounded-3 p-3 me-3">
+                    <i class="bi bi-exclamation-triangle fs-3"></i>
+                </div>
+                <div>
+                    <h6 class="text-muted mb-0 small text-uppercase fw-semibold">Total de Não Conformidades</h6>
+                    <h3 class="fw-bold mb-0 text-dark">
+                        {{ total_ncs }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Checklist History Table -->
+<div class="card premium-card border-0 shadow-sm animate-fade-in">
+    <div class="card-body p-0">
+        {% if sessions %}
+        <div class="table-responsive">
+            <table class="table table-premium mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;" class="text-center">ID</th>
+                        <th>Data</th>
+                        <th>Máquina</th>
+                        <th>Inspetor</th>
+                        <th>Líder</th>
+                        <th>Status</th>
+                        <th>Resumo de Não Conformidades (NC)</th>
+                        <th style="width: 160px;" class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in sessions %}
+                    <tr>
+                        <td class="text-center fw-semibold text-muted">#{{ session.id }}</td>
+                        <td>
+                            <div class="fw-semibold text-dark">{{ session.created_at|date:"d/m/Y" }}</div>
+                            <div class="text-muted small">{{ session.created_at|date:"H:i" }}</div>
+                        </td>
+                        <td class="fw-semibold text-dark">
+                            <i class="bi bi-cpu text-secondary me-1"></i> {{ session.machine.name }}
+                        </td>
+                        <td>
+                            <div class="fw-semibold">{{ session.inspector.username }}</div>
+                            <div class="text-muted small">{{ session.inspector.specialty }}</div>
+                        </td>
+                        <td class="text-secondary fw-medium">{% if session.leader %}{{ session.leader.get_full_name|default:session.leader.username }}{% else %}-{% endif %}</td>
+                        <td>
+                            {% if session.status == 'COMPLETED' %}
+                            <span class="badge badge-status badge-completed"><i class="bi bi-check-circle me-1"></i> Finalizado (Legado)</span>
+                            {% elif session.status == 'APROVADO' %}
+                            <span class="badge badge-status badge-completed"><i class="bi bi-shield-check me-1"></i> Aprovado</span>
+                            {% elif session.status == 'AGUARDANDO_LIDER' %}
+                            <span class="badge badge-status badge-paused bg-info text-dark"><i class="bi bi-hourglass-split me-1"></i> Aguardando Líder</span>
+                            {% elif session.status == 'REPROVADO_LIDER' %}
+                            <span class="badge badge-status badge-paused bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i> Reprovado Líder</span>
+                            {% elif session.status == 'REPROVAR_FINAL_REFAZER' %}
+                            <span class="badge badge-status bg-danger text-white"><i class="bi bi-arrow-counterclockwise me-1"></i> Reprovado - Refazer</span>
+                            {% elif session.status == 'IN_PROGRESS' %}
+                            <span class="badge badge-status badge-progress"><i class="bi bi-arrow-repeat me-1"></i> Andamento</span>
+                            {% elif session.status == 'PAUSED' %}
+                            <span class="badge badge-status badge-paused"><i class="bi bi-pause-fill me-1"></i> Pausado</span>
+                            {% else %}
+                            <span class="badge badge-status badge-notstarted">Não Iniciado</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if session.nc_list %}
+                                <div class="d-flex flex-wrap">
+                                    {% for nc in session.nc_list %}
+                                        <span class="badge-nc-list" title="{{ nc }}">{{ nc }}</span>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {% if session.status == 'APROVADO' or session.status == 'COMPLETED' %}
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 py-1 px-2 font-size-sm">
+                                        <i class="bi bi-check-lg me-1"></i> Nenhuma
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">Inspeção em andamento</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group">
+                                <a href="{% url 'checklist_execute' session.id %}" class="btn btn-sm btn-outline-primary border-0 me-1" title="Visualizar / Editar">
+                                    {% if session.status in 'COMPLETED,APROVADO,AGUARDANDO_LIDER,REPROVADO_LIDER' %}
+                                    <i class="bi bi-eye fs-5"></i>
+                                    {% else %}
+                                    <i class="bi bi-pencil-square fs-5"></i>
+                                    {% endif %}
+                                </a>
+                                {% if user.can_export_excel and session.status in 'COMPLETED,APROVADO' %}
+                                <a href="{% url 'export_checklist_excel' session.id %}" class="btn btn-sm btn-outline-success border-0" title="Exportar para Excel">
+                                    <i class="bi bi-file-earmark-excel fs-5"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-clipboard-x text-muted display-3 mb-3"></i>
+            <h4 class="fw-semibold text-dark">Nenhum checklist registrado</h4>
+            <p class="text-muted max-width-md mx-auto mb-4">Inicie um novo checklist de início de turno para ver o histórico aqui.</p>
+            {% if user.can_create_checklist %}
+            <a href="{% url 'checklist_start' %}" class="btn btn-primary-custom">
+                <i class="bi bi-plus-circle me-1"></i> Iniciar Primeiro Checklist
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

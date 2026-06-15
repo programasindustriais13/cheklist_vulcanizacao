@@ -1,0 +1,64 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Gerenciamento de Máquinas - Checklist System{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center animate-fade-in">
+    <div class="col-md-6">
+        <h2 class="fw-bold d-flex align-items-center">
+            <i class="bi bi-cpu text-primary me-2"></i> Cadastro de Máquinas
+        </h2>
+        <p class="text-muted mb-0">Gerencie as máquinas disponíveis para inspeções de início de turno</p>
+    </div>
+    <div class="col-md-6 text-md-end mt-3 mt-md-0">
+        <a href="{% url 'machine_create' %}" class="btn btn-primary-custom shadow-sm">
+            <i class="bi bi-plus-circle me-1"></i> Cadastrar Máquina
+        </a>
+    </div>
+</div>
+
+<div class="card premium-card border-0 shadow-sm animate-fade-in">
+    <div class="card-body p-0">
+        {% if machines %}
+        <div class="table-responsive">
+            <table class="table table-premium mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">ID</th>
+                        <th>Nome da Máquina</th>
+                        <th>Descrição / Setor</th>
+                        <th style="width: 180px;" class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for machine in machines %}
+                    <tr>
+                        <td class="fw-semibold text-muted">{{ machine.id }}</td>
+                        <td class="fw-semibold text-dark">{{ machine.name }}</td>
+                        <td class="text-secondary">{{ machine.description|default:"-" }}</td>
+                        <td class="text-center">
+                            <a href="{% url 'machine_update' machine.id %}" class="btn btn-sm btn-outline-primary border-0 me-2" title="Editar">
+                                <i class="bi bi-pencil-square fs-5"></i>
+                            </a>
+                            <a href="{% url 'machine_delete' machine.id %}" class="btn btn-sm btn-outline-danger border-0" title="Excluir">
+                                <i class="bi bi-trash fs-5"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-cone-striped text-muted display-3 mb-3"></i>
+            <h4 class="fw-semibold text-dark">Nenhuma máquina cadastrada</h4>
+            <p class="text-muted max-width-md mx-auto mb-4">Adicione máquinas para que os inspetores possam iniciar as auditorias de início de turno.</p>
+            <a href="{% url 'machine_create' %}" class="btn btn-primary-custom">
+                <i class="bi bi-plus-circle me-1"></i> Cadastrar Primeira Máquina
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

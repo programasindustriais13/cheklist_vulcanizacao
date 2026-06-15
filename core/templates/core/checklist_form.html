@@ -1,0 +1,394 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Execução de Checklist #{{ session.id }} - Checklist System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center animate-fade-in">
+    <div class="col-lg-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="fw-bold mb-0">
+                <i class="bi bi-card-checklist text-primary me-2"></i> Inspeção de Turno #{{ session.id }}
+            </h2>
+            <div>
+                {% if user.can_export_excel and session.status in 'COMPLETED,APROVADO' %}
+                <a href="{% url 'export_checklist_excel' session.id %}" class="btn btn-success shadow-sm">
+                    <i class="bi bi-file-earmark-excel me-1"></i> Exportar para Excel
+                </a>
+                {% endif %}
+                <a href="{% url 'dashboard' %}" class="btn btn-secondary-custom ms-2">Voltar ao Painel</a>
+            </div>
+        </div>
+
+        {% if errors %}
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-4 animate-fade-in">
+            <h6 class="fw-bold"><i class="bi bi-exclamation-triangle-fill me-2"></i> Erros de Validação:</h6>
+            <ul class="mb-0" style="font-size: 0.9rem;">
+                {% for error in errors %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <!-- WORKFLOW STATES BANNER ALERTS -->
+        {% if session.status == 'REPROVAR_FINAL_REFAZER' %}
+        <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-4 animate-fade-in d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="fw-bold mb-1"><i class="bi bi-exclamation-octagon-fill me-2"></i> CHECKLIST REPROVADO PELO ANALISTA</h6>
+                <p class="mb-0 small">Este checklist foi reprovado e necessita de correções imediatas nos itens assinalados. Clique no botão para reabrir o preenchimento.</p>
+            </div>
+            {% if request.user == session.inspector or user.is_superuser %}
+            <form action="{% url 'checklist_reopen' session.id %}" method="post" class="mb-0">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-sm px-3 fw-bold">
+                    <i class="bi bi-arrow-repeat me-1"></i> Reabrir para Ajustes
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if session.status == 'AGUARDANDO_LIDER' %}
+        <div class="alert alert-info border-0 shadow-sm rounded-4 mb-4 animate-fade-in d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="fw-bold mb-1"><i class="bi bi-hourglass-split me-2"></i> AGUARDANDO APROVAÇÃO DO LÍDER</h6>
+                <p class="mb-0 small">Este checklist foi finalizado e está aguardando a aprovação do Líder de Turno para ser homologado.</p>
+            </div>
+            {% if user.is_leader or user.is_superuser %}
+            <div class="d-flex gap-2">
+                <form action="{% url 'leader_decision' session.id %}" method="post" class="mb-0">
+                    {% csrf_token %}
+                    <button type="submit" name="decision" value="approve" class="btn btn-success btn-sm fw-bold">
+                        <i class="bi bi-check-lg me-1"></i> Aprovar
+                    </button>
+                </form>
+                <form action="{% url 'leader_decision' session.id %}" method="post" class="mb-0">
+                    {% csrf_token %}
+                    <button type="submit" name="decision" value="reject" class="btn btn-danger btn-sm fw-bold">
+                        <i class="bi bi-x-lg me-1"></i> Reprovar
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if session.status == 'REPROVADO_LIDER' %}
+        <div class="alert alert-warning border-0 shadow-sm rounded-4 mb-4 animate-fade-in d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i> REPROVADO PELO LÍDER - EM REVISÃO</h6>
+                <p class="mb-0 small">Este checklist foi reprovado pelo Líder e foi encaminhado automaticamente para revisão final de um Analista.</p>
+            </div>
+            {% if user.is_analyst or user.is_director or user.is_superuser %}
+            <div class="d-flex gap-2">
+                <form action="{% url 'analyst_decision' session.id %}" method="post" class="mb-0">
+                    {% csrf_token %}
+                    <button type="submit" name="decision" value="approve" class="btn btn-success btn-sm fw-bold">
+                        <i class="bi bi-check-lg me-1"></i> Aprovar (Sobrescrever)
+                    </button>
+                </form>
+                <form action="{% url 'analyst_decision' session.id %}" method="post" class="mb-0">
+                    {% csrf_token %}
+                    <button type="submit" name="decision" value="reject" class="btn btn-danger btn-sm fw-bold">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i> Devolver Técnico
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Top Metadata Card -->
+        <div class="card premium-card border-0 shadow-sm p-4 mb-4">
+            <div class="card-body">
+                <div class="row g-3 align-items-center">
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-semibold text-secondary small">MÁQUINA</label>
+                        <input type="text" class="form-control bg-light fw-medium" value="{{ session.machine.name }}" readonly>
+                    </div>
+                    
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-semibold text-secondary small">LÍDER DE TURNO</label>
+                        <input type="text" class="form-control bg-light fw-medium" value="{% if session.leader %}{{ session.leader.get_full_name|default:session.leader.username }}{% else %}-{% endif %}" readonly>
+                    </div>
+                    
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-semibold text-secondary small">INSPETOR (USUÁRIO)</label>
+                        <input type="text" class="form-control bg-light fw-medium" value="{{ session.inspector.username }} ({{ session.inspector.specialty }})" readonly>
+                    </div>
+                    
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-semibold text-secondary small">STATUS</label>
+                        <div>
+                            {% if session.status == 'COMPLETED' %}
+                            <span class="badge badge-status badge-completed"><i class="bi bi-check-circle me-1"></i> Finalizado (Legado)</span>
+                            {% elif session.status == 'APROVADO' %}
+                            <span class="badge badge-status badge-completed"><i class="bi bi-shield-check me-1"></i> Aprovado</span>
+                            {% elif session.status == 'AGUARDANDO_LIDER' %}
+                            <span class="badge badge-status badge-paused bg-info text-dark"><i class="bi bi-hourglass-split me-1"></i> Aguardando Líder</span>
+                            {% elif session.status == 'REPROVADO_LIDER' %}
+                            <span class="badge badge-status badge-paused bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i> Reprovado Líder</span>
+                            {% elif session.status == 'REPROVAR_FINAL_REFAZER' %}
+                            <span class="badge badge-status bg-danger text-white"><i class="bi bi-arrow-counterclockwise me-1"></i> Reprovado - Refazer</span>
+                            {% elif session.status == 'IN_PROGRESS' %}
+                            <span class="badge badge-status badge-progress"><i class="bi bi-arrow-repeat me-1"></i> Em Andamento</span>
+                            {% elif session.status == 'PAUSED' %}
+                            <span class="badge badge-status badge-paused"><i class="bi bi-pause-fill me-1"></i> Pausado</span>
+                            {% else %}
+                            <span class="badge badge-status badge-notstarted">Não Iniciado</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Time Log Section -->
+                <div class="row g-3 mt-3 pt-3 border-top text-muted small">
+                    <div class="col-md-6 col-lg-3">
+                        <i class="bi bi-clock me-1"></i> <strong>Criado em:</strong> {{ session.created_at|date:"d/m/Y H:i:s" }}
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <i class="bi bi-play-fill me-1"></i> <strong>Iniciado em:</strong> {{ session.started_at|date:"d/m/Y H:i:s"|default:"-" }}
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <i class="bi bi-pause-fill me-1"></i> <strong>Pausado em:</strong> {{ session.paused_at|date:"d/m/Y H:i:s"|default:"-" }}
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <i class="bi bi-check2-all me-1"></i> <strong>Finalizado em:</strong> {{ session.completed_at|date:"d/m/Y H:i:s"|default:"-" }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Checklist Execution Form -->
+        <form id="checklistForm" method="post" novalidate>
+            {% csrf_token %}
+            
+            {% for section_code, section_data in grouped_items.items %}
+            <div class="card premium-card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="fw-bold text-primary mb-3 border-bottom pb-2">
+                        {{ section_data.name }}
+                    </h5>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Item de Inspeção</th>
+                                    <th style="width: 200px;" class="text-center">Avaliação</th>
+                                    <th>Observações (Obrigatório para NC)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in section_data.items %}
+                                <tr class="item-row">
+                                    <td class="fw-medium text-dark">{{ item.item_name }}</td>
+                                    <td class="text-center">
+                                        <div class="status-radio-group">
+                                            <label>
+                                                <input type="radio" 
+                                                       name="status_{{ item.id }}" 
+                                                       value="C" 
+                                                       data-item-id="{{ item.id }}"
+                                                       class="radio-status"
+                                                       {% if item.status == 'C' %}checked{% endif %}
+                                                       {% if session.status != 'IN_PROGRESS' %}disabled{% endif %}>
+                                                <span class="btn-radio">C</span>
+                                            </label>
+                                            <label>
+                                                <input type="radio" 
+                                                       name="status_{{ item.id }}" 
+                                                       value="NC" 
+                                                       data-item-id="{{ item.id }}"
+                                                       class="radio-status"
+                                                       {% if item.status == 'NC' %}checked{% endif %}
+                                                       {% if session.status != 'IN_PROGRESS' %}disabled{% endif %}>
+                                                <span class="btn-radio text-danger">NC</span>
+                                            </label>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <textarea name="observations_{{ item.id }}" 
+                                                  id="obs_{{ item.id }}" 
+                                                  rows="1" 
+                                                  class="form-control obs-textarea" 
+                                                  placeholder="Insira detalhes..."
+                                                  {% if session.status != 'IN_PROGRESS' %}readonly{% endif %}>{{ item.observations|default:"" }}</textarea>
+                                        <div class="text-danger small mt-1 d-none" id="error_{{ item.id }}">
+                                            Observação obrigatória para Não Conforme (NC).
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+
+            <!-- Action Controls State Machine -->
+            <div class="card premium-card border-0 shadow-sm p-4 mb-5">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">
+                            {% if session.status == 'IN_PROGRESS' %}
+                            <i class="bi bi-info-circle me-1"></i> Lembre-se de preencher todos os itens antes de finalizar.
+                            {% elif session.status == 'PAUSED' %}
+                            <i class="bi bi-lock me-1"></i> O formulário está bloqueado. Clique em 'Continuar' para reativá-lo.
+                            {% elif session.status == 'APROVADO' or session.status == 'COMPLETED' %}
+                            <i class="bi bi-shield-check me-1"></i> Este checklist foi finalizado e está aprovado/arquivado no histórico.
+                            {% elif session.status == 'AGUARDANDO_LIDER' %}
+                            <i class="bi bi-clock-history me-1"></i> Aguardando aprovação do Líder de Turno.
+                            {% elif session.status == 'REPROVADO_LIDER' %}
+                            <i class="bi bi-exclamation-triangle me-1"></i> Reprovado pelo Líder. Aguardando revisão de um Analista.
+                            {% elif session.status == 'REPROVAR_FINAL_REFAZER' %}
+                            <i class="bi bi-exclamation-octagon-fill me-1 text-danger"></i> Reprovado Final. Reabra no topo ou com o botão ao lado.
+                            {% endif %}
+                        </span>
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        {% if session.status == 'IN_PROGRESS' %}
+                        <button type="submit" name="action" value="pause" class="btn btn-warning px-4 fw-semibold text-dark">
+                            <i class="bi bi-pause-fill me-1"></i> Salvar e Pausar
+                        </button>
+                        <button type="submit" name="action" value="finalize" class="btn btn-primary-custom px-4 fw-bold">
+                            <i class="bi bi-check-lg me-1"></i> Finalizar Checklist
+                        </button>
+                        {% elif session.status == 'PAUSED' %}
+                        <button type="submit" name="action" value="continue" class="btn btn-success px-4 fw-bold shadow-sm">
+                            <i class="bi bi-play-fill me-1"></i> Continuar Preenchimento
+                        </button>
+                        {% elif session.status == 'REPROVAR_FINAL_REFAZER' and request.user == session.inspector %}
+                        <button type="submit" form="reopenForm" class="btn btn-danger px-4 fw-bold shadow-sm">
+                            <i class="bi bi-arrow-repeat me-1"></i> Reabrir para Ajustes
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </form>
+        
+        <!-- Reopen helper form -->
+        {% if session.status == 'REPROVAR_FINAL_REFAZER' and request.user == session.inspector %}
+        <form id="reopenForm" action="{% url 'checklist_reopen' session.id %}" method="post" style="display:none;">
+            {% csrf_token %}
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const radioButtons = document.querySelectorAll(".radio-status");
+    const textareas = document.querySelectorAll(".obs-textarea");
+    const form = document.getElementById("checklistForm");
+
+    // Real-time styling update helper
+    function updateTextareaStyles(textarea, radioValue) {
+        if (radioValue === "NC") {
+            textarea.classList.add("textarea-warning");
+            if (textarea.value.trim() === "") {
+                textarea.classList.add("textarea-danger");
+            } else {
+                textarea.classList.remove("textarea-danger");
+            }
+        } else {
+            textarea.classList.remove("textarea-warning", "textarea-danger");
+        }
+    }
+
+    // Bind event listeners to radio selection changes
+    radioButtons.forEach(radio => {
+        radio.addEventListener("change", function () {
+            const itemId = this.getAttribute("data-item-id");
+            const textarea = document.getElementById("obs_" + itemId);
+            const radioValue = this.value;
+            
+            updateTextareaStyles(textarea, radioValue);
+        });
+    });
+
+    // Bind event listeners to textarea changes for real-time error removal
+    textareas.forEach(textarea => {
+        textarea.addEventListener("input", function () {
+            const itemId = this.id.replace("obs_", "");
+            const activeRadio = document.querySelector(`input[name="status_${itemId}"]:checked`);
+            const radioValue = activeRadio ? activeRadio.value : null;
+
+            updateTextareaStyles(this, radioValue);
+
+            // Hide error message if observation is typed
+            const errorDiv = document.getElementById("error_" + itemId);
+            if (this.value.trim() !== "" && errorDiv) {
+                errorDiv.classList.add("d-none");
+            }
+        });
+
+        // Initialize state styling on load
+        const itemId = textarea.id.replace("obs_", "");
+        const activeRadio = document.querySelector(`input[name="status_${itemId}"]:checked`);
+        const radioValue = activeRadio ? activeRadio.value : null;
+        updateTextareaStyles(textarea, radioValue);
+    });
+
+    // Perform validation on finalize submit
+    if (form) {
+        form.addEventListener("submit", function (event) {
+            // Find which action was clicked
+            const submitter = event.submitter;
+            if (submitter && submitter.value === "finalize") {
+                let hasErrors = false;
+                
+                // Read all active item rows
+                const rows = document.querySelectorAll(".item-row");
+                
+                rows.forEach(row => {
+                    // Extract item values
+                    const radioC = row.querySelector('input[value="C"]');
+                    const radioNC = row.querySelector('input[value="NC"]');
+                    const textarea = row.querySelector('.obs-textarea');
+                    const itemId = textarea.id.replace("obs_", "");
+                    const errorDiv = document.getElementById("error_" + itemId);
+
+                    const isChecked = radioC.checked || radioNC.checked;
+                    const isNC = radioNC.checked;
+                    const obsValue = textarea.value.trim();
+
+                    // 1. Validate status selected
+                    if (!isChecked) {
+                        hasErrors = true;
+                        row.classList.add("table-danger");
+                    } else {
+                        row.classList.remove("table-danger");
+                    }
+
+                    // 2. Validate NC observation dependency
+                    if (isNC && obsValue === "") {
+                        hasErrors = true;
+                        textarea.classList.add("textarea-danger");
+                        if (errorDiv) {
+                            errorDiv.classList.remove("d-none");
+                        }
+                    } else {
+                        if (errorDiv) {
+                            errorDiv.classList.add("d-none");
+                        }
+                    }
+                });
+
+                if (hasErrors) {
+                    event.preventDefault();
+                    // Alert warning and scroll to top of page
+                    alert("Atenção: existem itens pendentes de resposta ou itens marcados como NC que necessitam de observação detalhada.");
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

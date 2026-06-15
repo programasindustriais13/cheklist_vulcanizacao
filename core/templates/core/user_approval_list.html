@@ -1,0 +1,78 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Aprovação de Novos Usuários - Checklist System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center animate-fade-in">
+    <div class="col-lg-10">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="fw-bold mb-1">
+                    <i class="bi bi-people-fill text-primary me-2"></i> Aprovação de Novos Usuários
+                </h2>
+                <p class="text-muted mb-0">Ative o cadastro de novos inspetores e técnicos para permitir o acesso ao sistema</p>
+            </div>
+            <a href="{% url 'dashboard' %}" class="btn btn-secondary-custom">Voltar ao Painel</a>
+        </div>
+
+        <div class="card premium-card border-0 shadow-sm">
+            <div class="card-body p-0">
+                {% if pending_users %}
+                <div class="table-responsive">
+                    <table class="table table-premium mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Nome Completo</th>
+                                <th>Usuário</th>
+                                <th>Especialidade</th>
+                                <th>E-mail</th>
+                                <th>Cadastrado em</th>
+                                <th style="width: 180px;" class="text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in pending_users %}
+                            <tr>
+                                <td class="fw-semibold text-dark">
+                                    {{ u.first_name }} {{ u.last_name }}
+                                    {% if not u.first_name and not u.last_name %}
+                                        <span class="text-muted italic">Sem nome preenchido</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border px-2.5 py-1 fw-medium">{{ u.username }}</span>
+                                </td>
+                                <td class="fw-medium text-secondary">
+                                    {{ u.specialty }}
+                                </td>
+                                <td>
+                                    {{ u.email|default:"-" }}
+                                </td>
+                                <td class="text-muted small">
+                                    {{ u.date_joined|date:"d/m/Y H:i" }}
+                                </td>
+                                <td class="text-center">
+                                    <form action="{% url 'approve_user' u.id %}" method="post" class="m-0">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-primary-custom px-3 fw-bold w-100">
+                                            <i class="bi bi-person-check-fill me-1"></i> Aprovar Usuário
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-people text-muted display-4 mb-3 d-block"></i>
+                    <h5 class="fw-semibold text-dark">Nenhum usuário aguardando aprovação</h5>
+                    <p class="text-muted max-width-md mx-auto mb-0">Todos os cadastros registrados no sistema estão ativos e aprovados.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

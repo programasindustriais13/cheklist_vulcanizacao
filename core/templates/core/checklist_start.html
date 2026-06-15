@@ -1,0 +1,129 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Iniciar Checklist - Checklist System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center animate-fade-in">
+    <div class="col-lg-10">
+        <h2 class="fw-bold mb-4">
+            <i class="bi bi-play-circle text-primary me-2"></i> Iniciar Checklist de Início de Turno
+        </h2>
+        
+        <!-- Header Metadata Form Card -->
+        <div class="card premium-card border-0 shadow-sm p-4 mb-4">
+            <div class="card-body">
+                <h5 class="fw-bold mb-3 border-bottom pb-2">Informações Iniciais</h5>
+                
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6 col-lg-3">
+                            <label for="{{ form.machine.id_for_label }}" class="form-label fw-medium">Selecione a Máquina</label>
+                            {{ form.machine }}
+                            {% if form.machine.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.machine.errors %}{{ error }}{% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6 col-lg-3">
+                            <label for="{{ form.leader.id_for_label }}" class="form-label fw-medium">Nome do Líder de Turno</label>
+                            {{ form.leader }}
+                            {% if form.leader.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.leader.errors %}{{ error }}{% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6 col-lg-3">
+                            <label class="form-label fw-medium text-muted">Inspetor / Especialidade</label>
+                            <input type="text" class="form-control bg-light" value="{{ inspector.username }} ({{ inspector.specialty }})" readonly>
+                        </div>
+                        
+                        <div class="col-md-6 col-lg-3">
+                            <label class="form-label fw-medium text-muted">Status</label>
+                            <span class="form-control bg-light text-secondary d-flex align-items-center">
+                                <span class="bg-secondary rounded-circle me-2" style="width: 8px; height: 8px; display: inline-block;"></span>
+                                NÃO INICIADO
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-3 border-top d-flex justify-content-between align-items-center">
+                        <span class="text-muted small">
+                            <i class="bi bi-info-circle me-1"></i> Os itens de inspeção ficarão ativos após clicar em iniciar.
+                        </span>
+                        <div>
+                            <a href="{% url 'dashboard' %}" class="btn btn-secondary-custom me-2">Voltar</a>
+                            <button type="submit" class="btn btn-primary-custom px-4 py-2 fw-semibold">
+                                <i class="bi bi-play-fill me-1"></i> Iniciar Preenchimento
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Checklist Preview (Disabled Items Form) -->
+        <div class="card premium-card border-0 shadow-sm opacity-75">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-4">
+                    <h5 class="fw-bold mb-0">Itens de Inspeção (Prévia Desativada)</h5>
+                    <span class="badge bg-secondary text-uppercase" style="font-size: 0.75rem;">Modo de Leitura</span>
+                </div>
+                
+                {% for section_code, items in checklist_items_preview.items %}
+                <div class="mb-4">
+                    <h6 class="fw-bold text-primary mb-3 bg-light p-2 rounded">
+                        {% if section_code == 'HIDRAULICA' %}Hidráulica (Mecânico)
+                        {% elif section_code == 'PNEUMATICA' %}Pneumática (Mecânico)
+                        {% elif section_code == 'SISTEMA_VULCANIZACAO' %}Sistema de Vulcanização (Mecânico)
+                        {% elif section_code == 'SISTEMA_VAPOR' %}Sistema de Vapor (Mecânico)
+                        {% elif section_code == 'ESTRUTURA' %}Estrutura (Mecânico)
+                        {% elif section_code == 'ELETRICA' %}Elétrica (Eletricista)
+                        {% else %}{{ section_code }}{% endif %}
+                    </h6>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Item de Inspeção</th>
+                                    <th style="width: 240px;" class="text-center">Status</th>
+                                    <th>Observações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item_name in items %}
+                                <tr>
+                                    <td>{{ item_name }}</td>
+                                    <td class="text-center">
+                                        <div class="status-radio-group">
+                                            <label>
+                                                <input type="radio" disabled>
+                                                <span class="btn-radio">C</span>
+                                            </label>
+                                            <label>
+                                                <input type="radio" disabled>
+                                                <span class="btn-radio">NC</span>
+                                            </label>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input type="text" class="form-control" placeholder="Observações..." disabled>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

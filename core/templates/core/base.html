@@ -1,0 +1,135 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Checklist Industrial{% endblock %}</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{% static 'core/style.css' %}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+    <!-- Main Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom py-3">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="{% url 'dashboard' %}">
+                <i class="bi bi-check2-square text-primary me-2 fs-3"></i>
+                <span>CHECKLIST SYSTEM</span>
+            </a>
+            
+            {% if user.is_authenticated %}
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active text-primary fw-bold{% endif %}" href="{% url 'dashboard' %}">
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'machines' in request.path %}active text-primary fw-bold{% endif %}" href="{% url 'machine_list' %}">
+                            <i class="bi bi-gear me-1"></i> Máquinas
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center">
+                    {% if user.can_create_checklist %}
+                    <a href="{% url 'checklist_start' %}" class="btn btn-primary-custom me-3">
+                        <i class="bi bi-plus-circle me-1"></i> Novo Checklist
+                    </a>
+                    {% endif %}
+                    
+                    {% if user.is_director or user.is_analyst or user.is_superuser %}
+                    <a href="{% url 'user_approval_list' %}" class="btn btn-outline-primary me-3">
+                        <i class="bi bi-people-fill me-1"></i> Aprovar Usuários
+                    </a>
+                    {% endif %}
+                    
+                    <div class="dropdown">
+                        <button class="btn btn-link text-decoration-none dropdown-toggle text-dark fw-semibold p-0 d-flex align-items-center" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px;">
+                                {{ user.username|slice:":1"|upper }}
+                            </div>
+                            <div>
+                                <div class="text-start" style="font-size: 0.85rem; line-height: 1.2;">
+                                    {{ user.username }}
+                                </div>
+                                <div class="text-muted text-start" style="font-size: 0.7rem;">
+                                    {{ user.specialty }}
+                                </div>
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2" aria-labelledby="userMenuDropdown">
+                            <li><h6 class="dropdown-header">Conectado como {{ user.username }}</h6></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form action="{% url 'logout' %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item text-danger d-flex align-items-center">
+                                        <i class="bi bi-box-arrow-right me-2"></i> Sair
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="d-flex">
+                <a href="{% url 'login' %}" class="btn btn-secondary-custom me-2">Entrar</a>
+                <a href="{% url 'register' %}" class="btn btn-primary-custom">Cadastrar-se</a>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="container my-4 flex-grow-1">
+        <!-- Message System Notifications -->
+        {% if messages %}
+        <div class="row">
+            <div class="col-12">
+                {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% else %}success{% endif %} alert-dismissible fade show border-0 shadow-sm rounded-4 mb-3 animate-fade-in" role="alert">
+                    <div class="d-flex align-items-center">
+                        {% if message.tags == 'error' %}
+                        <i class="bi bi-x-circle-fill me-2 fs-5"></i>
+                        {% elif message.tags == 'warning' %}
+                        <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                        {% else %}
+                        <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+                        {% endif %}
+                        <div>
+                            {{ message }}
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-top py-3 mt-auto">
+        <div class="container text-center text-muted" style="font-size: 0.85rem;">
+            <span>&copy; 2026 Checklist System. Desenvolvido para Controle Industrial e Shifts-Start.</span>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

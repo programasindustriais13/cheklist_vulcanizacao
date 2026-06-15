@@ -1,0 +1,31 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Excluir Máquina - Checklist System{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center animate-fade-in">
+    <div class="col-md-8 col-lg-6">
+        <div class="card premium-card border-0 shadow-sm p-4 text-center">
+            <div class="card-body">
+                <i class="bi bi-exclamation-triangle text-danger display-4 mb-3 d-block"></i>
+                <h3 class="fw-bold text-dark mb-3">Excluir Máquina?</h3>
+                
+                <p class="text-secondary mb-4">
+                    Tem certeza de que deseja excluir a máquina <strong>"{{ machine.name }}"</strong>?<br>
+                    Esta ação é permanente e todos os dados associados a esta máquina serão excluídos do sistema.
+                </p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{% url 'machine_list' %}" class="btn btn-secondary-custom px-4">Cancelar</a>
+                        <button type="submit" class="btn btn-danger px-4 py-2 fw-semibold rounded-3 shadow-sm">
+                            <i class="bi bi-trash me-1"></i> Confirmar Exclusão
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
