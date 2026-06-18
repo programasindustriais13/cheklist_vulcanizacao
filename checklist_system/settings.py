@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "session_security",
     "core",
 ]
 
@@ -45,6 +46,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Deve ficar APÓS o AuthenticationMiddleware:
+    "session_security.middleware.SessionSecurityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -127,3 +130,13 @@ AUTH_USER_MODEL = "core.User"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 LOGIN_URL = "login"
+
+# =============================================================================
+# SESSION SECURITY - Timeout por Inatividade para Tablets Compartilhados
+# =============================================================================
+# Após 4(240) minutos sem atividade (toque/digitação), exibe aviso em tela.
+SESSION_SECURITY_WARN_AFTER = 3600
+# Após 5(300) minutos sem atividade, faz logout automático.
+SESSION_SECURITY_EXPIRE_AFTER = 4200
+# Garante que a sessão seja destruída ao fechar o navegador.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True

@@ -1,9 +1,11 @@
 import io
+import json
+from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login as auth_login, logout as auth_logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 from django.contrib import messages
 from django.db import transaction
@@ -70,12 +72,23 @@ def register_view(request):
 # MACHINE CRUD VIEWS
 # =====================================================================
 
+def machine_management_required(view_func):
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if request.user.is_authenticated and (request.user.is_superuser or request.user.specialty in ['Diretor', 'Analista']):
+            return view_func(request, *args, **kwargs)
+        messages.error(request, "Você não tem permissão para acessar esta página.")
+        return redirect('dashboard')
+    return _wrapped_view
+
 @login_required
+@machine_management_required
 def machine_list(request):
     machines = Machine.objects.all().order_by('name')
     return render(request, 'core/machine_list.html', {'machines': machines})
 
 @login_required
+@machine_management_required
 def machine_create(request):
     if request.method == 'POST':
         form = MachineForm(request.POST)
@@ -88,6 +101,7 @@ def machine_create(request):
     return render(request, 'core/machine_form.html', {'form': form, 'title': 'Cadastrar Máquina'})
 
 @login_required
+@machine_management_required
 def machine_update(request, pk):
     machine = get_object_or_404(Machine, pk=pk)
     if request.method == 'POST':
@@ -101,6 +115,7 @@ def machine_update(request, pk):
     return render(request, 'core/machine_form.html', {'form': form, 'title': 'Editar Máquina', 'machine': machine})
 
 @login_required
+@machine_management_required
 def machine_delete(request, pk):
     machine = get_object_or_404(Machine, pk=pk)
     if request.method == 'POST':
@@ -750,3 +765,55 @@ def export_dashboard_excel(request):
     )
     response['Content-Disposition'] = 'attachment; filename="Historico_Geral_Checklists.xlsx"'
     return response
+
+# =====================================================================
+# TIMEOUT POR INATIVIDADE - SALVAR E PAUSAR ANTES DO LOGOUT
+# =====================================================================
+
+@login_required
+def timeout_pause_checklist(request):
+    """
+    View AJAX chamada pelo JavaScript do front-end imediatamente antes
+    do redirect de logout automático do django-session-security.
+
+    Busca o checklist IN_PROGRESS do usuário logado e o pausa com o
+    motivo 'Pausa automática: Timeout por inatividade', garantindo que
+    nenhum dado em andamento seja perdido.
+
+    Não aceita session_id do cliente — busca pelo próprio request.user
+    para evitar manipulação de requisição.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'Método não permitido.'}, status=405)
+
+    # Busca o checklist ativo do usuário autenticado
+    active_session = ChecklistSession.objects.filter(
+        inspector=request.user,
+        status='IN_PROGRESS'
+    ).first()
+
+    if not active_session:
+        # Nenhum checklist em andamento — logout pode prosseguir normalmente
+        return JsonResponse({'status': 'ok', 'message': 'Nenhum checklist ativo. Logout liberado.'})
+
+    MOTIVO_TIMEOUT = "Pausa automática: Timeout por inatividade"
+
+    try:
+        with transaction.atomic():
+            active_session.status = 'PAUSED'
+            active_session.paused_at = timezone.now()
+            active_session.save()
+
+            ChecklistTimelineLog.objects.create(
+                session=active_session,
+                user=request.user,
+                action='PAUSE',
+                pause_reason=MOTIVO_TIMEOUT
+            )
+        return JsonResponse({
+            'status': 'ok',
+            'message': f'Checklist #{active_session.id} pausado automaticamente por inatividade.',
+            'session_id': active_session.id,
+        })
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

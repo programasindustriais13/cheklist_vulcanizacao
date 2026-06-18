@@ -320,3 +320,53 @@ class ChecklistSystemTests(TestCase):
         self.client.login(username='test_analyst', password='testpassword123')
         response = self.client.get(reverse('export_checklist_excel', kwargs={'session_id': session.id}))
         self.assertEqual(response.status_code, 200)
+
+    def test_machine_rbac(self):
+        # 1. Prohibited profile: Inspector (Eletricista)
+        self.client.login(username='test_inspector', password='testpassword123')
+        
+        # Test machine list
+        response = self.client.get(reverse('machine_list'))
+        self.assertRedirects(response, reverse('dashboard'))
+        # Follow the redirect to check that the warning message is present
+        response_follow = self.client.get(reverse('machine_list'), follow=True)
+        self.assertContains(response_follow, "Você não tem permissão para acessar esta página.")
+        
+        # Test machine create
+        response = self.client.get(reverse('machine_create'))
+        self.assertRedirects(response, reverse('dashboard'))
+        
+        # Test machine update
+        response = self.client.get(reverse('machine_update', kwargs={'pk': self.machine.id}))
+        self.assertRedirects(response, reverse('dashboard'))
+        
+        # Test machine delete
+        response = self.client.get(reverse('machine_delete', kwargs={'pk': self.machine.id}))
+        self.assertRedirects(response, reverse('dashboard'))
+        
+        # 2. Prohibited profile: Leader
+        self.client.login(username='test_leader', password='testpassword123')
+        response = self.client.get(reverse('machine_list'))
+        self.assertRedirects(response, reverse('dashboard'))
+        
+        # 3. Permitted profile: Analyst
+        self.client.login(username='test_analyst', password='testpassword123')
+        response = self.client.get(reverse('machine_list'))
+        self.assertEqual(response.status_code, 200)
+        
+        # 4. Permitted profile: Director
+        self.client.login(username='test_director', password='testpassword123')
+        response = self.client.get(reverse('machine_list'))
+        self.assertEqual(response.status_code, 200)
+        
+        # 5. Permitted profile: Superuser
+        superuser = User.objects.create_superuser(
+            username='test_superuser',
+            password='testpassword123',
+            email='super@test.com',
+            is_active=True
+        )
+        self.client.login(username='test_superuser', password='testpassword123')
+        response = self.client.get(reverse('machine_list'))
+        self.assertEqual(response.status_code, 200)
+

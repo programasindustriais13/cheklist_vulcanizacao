@@ -33,4 +33,7 @@ urlpatterns = [
     # Excel Exports
     path('checklist/<int:session_id>/export/', views.export_checklist_excel, name='export_checklist_excel'),
     path('dashboard/export/', views.export_dashboard_excel, name='export_dashboard_excel'),
+
+    # Timeout por Inatividade - Salvar e Pausar Checklist antes do Logout
+    path('timeout-pause/', views.timeout_pause_checklist, name='timeout_pause_checklist'),
 ]
