@@ -230,6 +230,7 @@ def checklist_start(request):
 def checklist_execute(request, session_id):
     session = get_object_or_404(ChecklistSession, id=session_id)
     items = session.items.all().order_by('id')
+    pause_logs = session.timeline_logs.filter(action='PAUSE').order_by('timestamp')
     
     sections_map = {
         'HIDRAULICA': 'Hidráulica (Mecânico)',
@@ -256,6 +257,11 @@ def checklist_execute(request, session_id):
             return redirect('checklist_execute', session_id=session.id)
             
         if action == 'pause':
+            pause_reason = request.POST.get('pause_reason', '').strip()
+            if not pause_reason:
+                messages.error(request, "O motivo da pausa é obrigatório.")
+                return redirect('checklist_execute', session_id=session.id)
+
             # Save progress so far (no strict validation required for pauses)
             with transaction.atomic():
                 for item in items:
@@ -273,7 +279,8 @@ def checklist_execute(request, session_id):
                 ChecklistTimelineLog.objects.create(
                     session=session,
                     user=request.user,
-                    action='PAUSE'
+                    action='PAUSE',
+                    pause_reason=pause_reason
                 )
             messages.warning(request, "Checklist pausado. Suas alterações foram salvas.")
             return redirect('checklist_execute', session_id=session.id)
@@ -333,6 +340,7 @@ def checklist_execute(request, session_id):
                         'session': session,
                         'grouped_items': grouped_items,
                         'errors': errors,
+                        'pause_logs': pause_logs,
                     }
                     return render(request, 'core/checklist_form.html', context)
                 
@@ -361,6 +369,7 @@ def checklist_execute(request, session_id):
     context = {
         'session': session,
         'grouped_items': grouped_items,
+        'pause_logs': pause_logs,
     }
     return render(request, 'core/checklist_form.html', context)
 
@@ -556,6 +565,25 @@ def export_checklist_excel(request, session_id):
         ws.row_dimensions[current_row].height = 22
         current_row += 1
         
+    # Get pause reason history
+    pause_logs = session.timeline_logs.filter(action='PAUSE').order_by('timestamp')
+    pause_details = []
+    for log in pause_logs:
+        dt_str = log.timestamp.astimezone().strftime("%d/%m/%Y %H:%M")
+        reason = log.pause_reason or "Sem motivo"
+        pause_details.append(f"[{dt_str}] {reason}")
+    pause_history_str = " | ".join(pause_details) if pause_details else "Nenhuma pausa registrada"
+
+    ws.cell(row=current_row, column=1, value="Histórico de Pausas:").font = meta_label_font
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=2, value=pause_history_str).font = meta_value_font
+    
+    for col in range(1, 5):
+        ws.cell(row=current_row, column=col).border = thin_border
+        ws.cell(row=current_row, column=col).alignment = Alignment(vertical='center', wrap_text=True)
+    ws.row_dimensions[current_row].height = None
+    current_row += 1
+        
     current_row += 1 # Empty row
     
     # Section header columns
@@ -662,7 +690,7 @@ def export_dashboard_excel(request):
     ws.row_dimensions[1].height = 45
     
     # Header columns
-    headers = ["ID", "Data Criação", "Máquina", "Inspetor", "Líder", "Status", "Não Conformidades"]
+    headers = ["ID", "Data Criação", "Máquina", "Inspetor", "Líder", "Status", "Não Conformidades", "Histórico de Pausas"]
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col_idx, value=h)
         cell.font = header_font
@@ -676,6 +704,15 @@ def export_dashboard_excel(request):
         nc_items = s.items.filter(status='NC')
         nc_summary = ", ".join([item.item_name for item in nc_items]) if nc_items.exists() else "Nenhuma"
         
+        # Concatenate pause logs
+        pause_logs = s.timeline_logs.filter(action='PAUSE').order_by('timestamp')
+        pause_details = []
+        for log in pause_logs:
+            dt_str = log.timestamp.astimezone().strftime("%d/%m/%Y %H:%M")
+            reason = log.pause_reason or "Sem motivo"
+            pause_details.append(f"[{dt_str}] {reason}")
+        pause_history_str = " | ".join(pause_details) if pause_details else "Nenhuma"
+
         ws.cell(row=current_row, column=1, value=s.id).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=2, value=s.created_at.astimezone().strftime("%d/%m/%Y %H:%M")).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=3, value=s.machine.name)
@@ -683,8 +720,9 @@ def export_dashboard_excel(request):
         ws.cell(row=current_row, column=5, value=s.leader.get_full_name() or s.leader.username if s.leader else "-")
         ws.cell(row=current_row, column=6, value=s.get_status_display()).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=7, value=nc_summary)
+        ws.cell(row=current_row, column=8, value=pause_history_str)
         
-        for col in range(1, 8):
+        for col in range(1, 9):
             cell = ws.cell(row=current_row, column=col)
             cell.font = cell_font
             cell.border = thin_border
@@ -700,6 +738,7 @@ def export_dashboard_excel(request):
     ws.column_dimensions['E'].width = 22
     ws.column_dimensions['F'].width = 18
     ws.column_dimensions['G'].width = 60
+    ws.column_dimensions['H'].width = 50
     
     output = io.BytesIO()
     wb.save(output)

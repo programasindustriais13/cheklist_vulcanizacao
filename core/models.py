@@ -87,6 +87,7 @@ class ChecklistTimelineLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name='Usuário')
     action = models.CharField(max_length=20, choices=ACTION_CHOICES, verbose_name='Ação')
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name='Data/Hora')
+    pause_reason = models.TextField(null=True, blank=True, verbose_name='Motivo da Pausa')
 
     def __str__(self):
         return f"{self.session.id} - {self.action} por {self.user.username if self.user else 'Desconhecido'} em {self.timestamp}"

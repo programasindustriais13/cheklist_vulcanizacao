@@ -143,25 +143,49 @@
                 
                 <!-- Time Log Section -->
                 <div class="row g-3 mt-3 pt-3 border-top text-muted small">
-                    <div class="col-md-6 col-lg-3">
+                    <div class="col-md-4">
                         <i class="bi bi-clock me-1"></i> <strong>Criado em:</strong> {{ session.created_at|date:"d/m/Y H:i:s" }}
                     </div>
-                    <div class="col-md-6 col-lg-3">
+                    <div class="col-md-4">
                         <i class="bi bi-play-fill me-1"></i> <strong>Iniciado em:</strong> {{ session.started_at|date:"d/m/Y H:i:s"|default:"-" }}
                     </div>
-                    <div class="col-md-6 col-lg-3">
-                        <i class="bi bi-pause-fill me-1"></i> <strong>Pausado em:</strong> {{ session.paused_at|date:"d/m/Y H:i:s"|default:"-" }}
-                    </div>
-                    <div class="col-md-6 col-lg-3">
+                    <div class="col-md-4">
                         <i class="bi bi-check2-all me-1"></i> <strong>Finalizado em:</strong> {{ session.completed_at|date:"d/m/Y H:i:s"|default:"-" }}
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Histórico de Pausas -->
+        {% if pause_logs %}
+        <div class="card premium-card border-0 shadow-sm p-4 mb-4 animate-fade-in">
+            <div class="card-body p-0">
+                <h6 class="fw-bold text-secondary mb-3 d-flex align-items-center">
+                    <i class="bi bi-pause-circle-fill text-warning me-2 fs-5"></i> Histórico de Pausas deste Turno
+                </h6>
+                <div class="list-group list-group-flush">
+                    {% for log in pause_logs %}
+                    <div class="list-group-item bg-transparent px-0 py-2 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center border-bottom border-light">
+                        <div>
+                            <span class="badge bg-warning text-dark me-2">Pausa #{{ forloop.counter }}</span>
+                            <span class="text-secondary small me-3"><i class="bi bi-clock me-1"></i> {{ log.timestamp|date:"d/m/Y \à\s H:i:s" }}</span>
+                            <span class="text-secondary small"><i class="bi bi-person me-1"></i> por <strong>{{ log.user.username }}</strong></span>
+                        </div>
+                        <div class="mt-1 mt-md-0 fw-semibold text-dark text-break">
+                            <strong>Motivo:</strong> {{ log.pause_reason }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Checklist Execution Form -->
         <form id="checklistForm" method="post" novalidate>
             {% csrf_token %}
+            <input type="hidden" name="action" id="hidden_action">
+            <input type="hidden" name="pause_reason" id="hidden_pause_reason">
             
             {% for section_code, section_data in grouped_items.items %}
             <div class="card premium-card border-0 shadow-sm mb-4">
@@ -250,7 +274,7 @@
                     
                     <div class="d-flex gap-2">
                         {% if session.status == 'IN_PROGRESS' %}
-                        <button type="submit" name="action" value="pause" class="btn btn-warning px-4 fw-semibold text-dark">
+                        <button type="button" class="btn btn-warning px-4 fw-semibold text-dark" data-bs-toggle="modal" data-bs-target="#pauseModal">
                             <i class="bi bi-pause-fill me-1"></i> Salvar e Pausar
                         </button>
                         <button type="submit" name="action" value="finalize" class="btn btn-primary-custom px-4 fw-bold">
@@ -276,6 +300,33 @@
             {% csrf_token %}
         </form>
         {% endif %}
+    </div>
+</div>
+
+<!-- Modal de Pausa (Posicionado fora do container animado para evitar sombreamento e z-index incorreto do Bootstrap backdrop) -->
+<div class="modal fade" id="pauseModal" tabindex="-1" aria-labelledby="pauseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 bg-warning text-dark">
+                <h5 class="modal-title fw-bold" id="pauseModalLabel">
+                    <i class="bi bi-pause-fill me-1"></i> Confirmar Pausa do Checklist
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-4 text-start">
+                <p class="text-muted small">Por favor, informe o motivo para pausar este checklist. Este motivo será registrado no histórico do banco de dados e no relatório Excel.</p>
+                <div class="mb-3">
+                    <label for="pauseReasonTextarea" class="form-label fw-semibold text-secondary small">Motivo da Pausa *</label>
+                    <textarea class="form-control" id="pauseReasonTextarea" rows="3" placeholder="Ex: Troca de turno, aguardando material, etc." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnConfirmPause" class="btn btn-warning fw-semibold rounded-3" disabled>
+                    Confirmar Pausa
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -386,6 +437,32 @@ document.addEventListener("DOMContentLoaded", function () {
                     alert("Atenção: existem itens pendentes de resposta ou itens marcados como NC que necessitam de observação detalhada.");
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
+            }
+        });
+    }
+
+    // Modal Pause Reason validator
+    const pauseReasonTextarea = document.getElementById("pauseReasonTextarea");
+    const btnConfirmPause = document.getElementById("btnConfirmPause");
+    const hiddenAction = document.getElementById("hidden_action");
+    const hiddenPauseReason = document.getElementById("hidden_pause_reason");
+    const checklistForm = document.getElementById("checklistForm");
+
+    if (pauseReasonTextarea && btnConfirmPause) {
+        pauseReasonTextarea.addEventListener("input", function () {
+            if (this.value.trim() !== "") {
+                btnConfirmPause.removeAttribute("disabled");
+            } else {
+                btnConfirmPause.setAttribute("disabled", "true");
+            }
+        });
+
+        btnConfirmPause.addEventListener("click", function () {
+            const reason = pauseReasonTextarea.value.trim();
+            if (reason !== "") {
+                hiddenAction.value = "pause";
+                hiddenPauseReason.value = reason;
+                checklistForm.submit();
             }
         });
     }

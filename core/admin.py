@@ -21,7 +21,7 @@ class ChecklistSessionAdmin(admin.ModelAdmin):
     search_fields = ('leader__username', 'leader__first_name', 'leader__last_name')
 
 class ChecklistTimelineLogAdmin(admin.ModelAdmin):
-    list_display = ('session', 'user', 'action', 'timestamp')
+    list_display = ('session', 'user', 'action', 'pause_reason', 'timestamp')
     list_filter = ('action', 'user')
 
 class ChecklistItemValueAdmin(admin.ModelAdmin):

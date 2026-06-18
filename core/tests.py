@@ -135,6 +135,7 @@ class ChecklistSystemTests(TestCase):
             reverse('checklist_execute', kwargs={'session_id': session.id}),
             {
                 'action': 'pause',
+                'pause_reason': 'Aguardando peças do estoque',
                 f'status_{item.id}': 'C',
                 f'observations_{item.id}': 'Checked conforme'
             }
@@ -145,6 +146,18 @@ class ChecklistSystemTests(TestCase):
         self.assertEqual(session.status, 'PAUSED')
         self.assertEqual(item.status, 'C')
         self.assertEqual(item.observations, 'Checked conforme')
+
+        # Verify timeline log contains the reason
+        log = ChecklistTimelineLog.objects.filter(session=session, action='PAUSE').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.pause_reason, 'Aguardando peças do estoque')
+
+        # Verify pause_logs is present in GET context
+        response = self.client.get(reverse('checklist_execute', kwargs={'session_id': session.id}))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('pause_logs', response.context)
+        self.assertEqual(len(response.context['pause_logs']), 1)
+        self.assertEqual(response.context['pause_logs'][0].pause_reason, 'Aguardando peças do estoque')
         
         # Continue session
         response = self.client.post(
@@ -154,6 +167,41 @@ class ChecklistSystemTests(TestCase):
             }
         )
         
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'IN_PROGRESS')
+
+    def test_checklist_pause_requires_reason(self):
+        self.client.login(username='test_inspector', password='testpassword123')
+        
+        session = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            status='IN_PROGRESS',
+            started_at=timezone.now()
+        )
+        item = ChecklistItemValue.objects.create(
+            session=session,
+            section='ELETRICA',
+            item_name='Test item',
+            status=None
+        )
+        
+        # Attempt to pause without reason (empty string)
+        response = self.client.post(
+            reverse('checklist_execute', kwargs={'session_id': session.id}),
+            {
+                'action': 'pause',
+                'pause_reason': '',
+                f'status_{item.id}': 'C',
+                f'observations_{item.id}': 'Checked conforme'
+            }
+        )
+        
+        # Should redirect back to checklist execution page
+        self.assertRedirects(response, reverse('checklist_execute', kwargs={'session_id': session.id}))
+        
+        # Status should NOT be PAUSED, should remain IN_PROGRESS
         session.refresh_from_db()
         self.assertEqual(session.status, 'IN_PROGRESS')
 
