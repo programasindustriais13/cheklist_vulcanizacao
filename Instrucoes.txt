@@ -62,3 +62,35 @@ a nova versão para o GitHub:
 3. Envie para o GitHub:
    > git push origin main
 
+================================================================================
+ALTERAÇÃO: Correção Card Aprovados + Filtro por Período na Dashboard
+Data: 2026-06-22
+================================================================================
+
+Arquivos alterados:
+- core/views.py
+- core/templates/core/dashboard.html
+
+Resumo das alterações:
+
+1. CORREÇÃO DO CARD "APROVADOS" (BUG):
+   - O card usava {% regroup %} no template para contar aprovados, o que podia
+     exibir valor vazio ao invés de "0" quando não havia aprovados.
+   - Lógica movida para a view (backend): approved_count calculado via
+     sessions.filter(status='APROVADO').count()
+   - Template agora exibe apenas {{ approved_count }}
+
+2. FILTRO POR PERÍODO NA DASHBOARD:
+   - Adicionado formulário GET com campos Data Inicial e Data Final + botão Filtrar
+   - Default: mês corrente (1º dia até hoje)
+   - Filtra: cards indicadores (Total, Aprovados, Ativos, NCs) e tabela de histórico
+   - NÃO filtra: filas de aprovação (Líder/Analista/Correções) — operacionais
+   - Botão "Limpar" volta ao filtro padrão (mês corrente)
+
+3. EXPORTAÇÃO EXCEL COM FILTRO:
+   - Botão "Exportar Histórico (Excel)" passa data_inicio e data_fim na URL
+   - View export_dashboard_excel respeita o filtro de período
+   - Nome do arquivo inclui o período: Historico_Checklists_DD-MM-YYYY_a_DD-MM-YYYY.xlsx
+
+Nenhuma migration necessária (sem alteração de models).
+Testes automatizados: 11/11 OK.

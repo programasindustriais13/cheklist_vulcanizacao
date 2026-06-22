@@ -12,7 +12,7 @@
     </div>
     <div class="col-md-6 text-md-end mt-3 mt-md-0">
         {% if user.can_export_excel %}
-        <a href="{% url 'export_dashboard_excel' %}" class="btn btn-outline-success shadow-sm me-2">
+        <a href="{% url 'export_dashboard_excel' %}?data_inicio={{ data_inicio }}&data_fim={{ data_fim }}" class="btn btn-outline-success shadow-sm me-2">
             <i class="bi bi-file-earmark-excel me-1"></i> Exportar Histórico (Excel)
         </a>
         {% endif %}
@@ -21,6 +21,36 @@
             <i class="bi bi-plus-circle me-1"></i> Iniciar Inspeção
         </a>
         {% endif %}
+    </div>
+</div>
+
+<!-- Filtro por Período -->
+<div class="card premium-card border-0 shadow-sm mb-4 animate-fade-in">
+    <div class="card-body py-3 px-4">
+        <form method="GET" action="{% url 'dashboard' %}" class="row g-2 align-items-end" id="form-filtro-periodo">
+            <div class="col-auto">
+                <label for="data_inicio" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-calendar-event me-1"></i>Data Inicial
+                </label>
+                <input type="date" id="data_inicio" name="data_inicio" class="form-control form-control-sm" value="{{ data_inicio }}">
+            </div>
+            <div class="col-auto">
+                <label for="data_fim" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-calendar-event me-1"></i>Data Final
+                </label>
+                <input type="date" id="data_fim" name="data_fim" class="form-control form-control-sm" value="{{ data_fim }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary-custom">
+                    <i class="bi bi-funnel me-1"></i> Filtrar
+                </button>
+            </div>
+            <div class="col-auto">
+                <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary" title="Limpar filtro (voltar para mês atual)">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpar
+                </a>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -246,14 +276,7 @@
                 </div>
                 <div>
                     <h6 class="text-muted mb-0 small text-uppercase fw-semibold">Aprovados</h6>
-                    <h3 class="fw-bold mb-0 text-dark">
-                        {% regroup sessions by status as status_list %}
-                        {% for group in status_list %}
-                            {% if group.grouper == 'APROVADO' %}{{ group.list|length }}{% endif %}
-                        {% empty %}
-                            0
-                        {% endfor %}
-                    </h3>
+                    <h3 class="fw-bold mb-0 text-dark">{{ approved_count }}</h3>
                 </div>
             </div>
         </div>

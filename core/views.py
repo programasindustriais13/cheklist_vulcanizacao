@@ -1,5 +1,6 @@
 import io
 import json
+from datetime import datetime, time as dt_time
 from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login as auth_login, logout as auth_logout, authenticate
@@ -131,26 +132,54 @@ def machine_delete(request, pk):
 @login_required
 def dashboard(request):
     user = request.user
+
+    # --- FILTRO POR PERÍODO (parâmetros GET) ---
+    today = timezone.localdate()
+    default_inicio = today.replace(day=1)  # 1º dia do mês corrente
+    default_fim = today
+
+    data_inicio_str = request.GET.get('data_inicio', '')
+    data_fim_str = request.GET.get('data_fim', '')
+
+    try:
+        data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else default_inicio
+    except ValueError:
+        data_inicio = default_inicio
+
+    try:
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else default_fim
+    except ValueError:
+        data_fim = default_fim
+
+    # Converter para datetime aware para comparação com DateTimeField
+    dt_inicio = timezone.make_aware(datetime.combine(data_inicio, dt_time.min))
+    dt_fim = timezone.make_aware(datetime.combine(data_fim, dt_time.max))
+
+    # --- QUERYSET DE SESSÕES (filtrada por período) ---
     if user.is_technician:
         # Technicians only see checklists they inspected
-        sessions = ChecklistSession.objects.filter(inspector=user).select_related('machine', 'inspector').order_by('-created_at')
+        sessions = ChecklistSession.objects.filter(
+            inspector=user, created_at__gte=dt_inicio, created_at__lte=dt_fim
+        ).select_related('machine', 'inspector').order_by('-created_at')
     else:
         # Leaders, Analysts, and Directors see all checklists
-        sessions = ChecklistSession.objects.select_related('machine', 'inspector').all().order_by('-created_at')
-    
-    active_count = 0
+        sessions = ChecklistSession.objects.filter(
+            created_at__gte=dt_inicio, created_at__lte=dt_fim
+        ).select_related('machine', 'inspector').order_by('-created_at')
+
+    # --- KPIs CALCULADOS NO BACKEND ---
+    approved_count = sessions.filter(status='APROVADO').count()
+    active_count = sessions.filter(status__in=['IN_PROGRESS', 'PAUSED']).count()
     total_ncs = 0
-    
+
     # Prepare non-conformity list for each session
     for s in sessions:
         nc_items = s.items.filter(status='NC')
         s.nc_list = [item.item_name for item in nc_items]
         s.nc_summary = ", ".join(s.nc_list) if s.nc_list else "Nenhuma"
-        
-        if s.status in ['IN_PROGRESS', 'PAUSED']:
-            active_count += 1
         total_ncs += len(s.nc_list)
-        
+
+    # --- FILAS DE APROVAÇÃO (NÃO filtradas por período — operacional) ---
     # Get pending checklists for Lider approval
     pending_leader = []
     if user.is_leader or user.is_superuser:
@@ -159,7 +188,7 @@ def dashboard(request):
             nc_items = s.items.filter(status='NC')
             s.nc_list = [item.item_name for item in nc_items]
             s.nc_summary = ", ".join(s.nc_list) if s.nc_list else "Nenhuma"
-            
+
     # Get checklists rejected by Leader for Analyst review
     pending_analyst = []
     if user.is_analyst or user.is_director or user.is_superuser:
@@ -177,11 +206,14 @@ def dashboard(request):
             nc_items = s.items.filter(status='NC')
             s.nc_list = [item.item_name for item in nc_items]
             s.nc_summary = ", ".join(s.nc_list) if s.nc_list else "Nenhuma"
-            
+
     return render(request, 'core/dashboard.html', {
         'sessions': sessions,
+        'approved_count': approved_count,
         'active_count': active_count,
         'total_ncs': total_ncs,
+        'data_inicio': data_inicio.isoformat(),
+        'data_fim': data_fim.isoformat(),
         'pending_leader': pending_leader,
         'pending_analyst': pending_analyst,
         'pending_corrections': pending_corrections,
@@ -679,8 +711,31 @@ def export_checklist_excel(request, session_id):
 def export_dashboard_excel(request):
     if not request.user.can_export_excel:
         return HttpResponseForbidden("Você não tem permissão para exportar o histórico para Excel.")
-        
-    sessions = ChecklistSession.objects.select_related('machine', 'inspector').all().order_by('-created_at')
+
+    # --- FILTRO POR PERÍODO (mesma lógica da dashboard) ---
+    today = timezone.localdate()
+    default_inicio = today.replace(day=1)
+    default_fim = today
+
+    data_inicio_str = request.GET.get('data_inicio', '')
+    data_fim_str = request.GET.get('data_fim', '')
+
+    try:
+        data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else default_inicio
+    except ValueError:
+        data_inicio = default_inicio
+
+    try:
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else default_fim
+    except ValueError:
+        data_fim = default_fim
+
+    dt_inicio = timezone.make_aware(datetime.combine(data_inicio, dt_time.min))
+    dt_fim = timezone.make_aware(datetime.combine(data_fim, dt_time.max))
+
+    sessions = ChecklistSession.objects.filter(
+        created_at__gte=dt_inicio, created_at__lte=dt_fim
+    ).select_related('machine', 'inspector').order_by('-created_at')
     
     wb = Workbook()
     ws = wb.active
@@ -763,7 +818,9 @@ def export_dashboard_excel(request):
         output.read(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    response['Content-Disposition'] = 'attachment; filename="Historico_Geral_Checklists.xlsx"'
+    safe_inicio = data_inicio.strftime('%d-%m-%Y')
+    safe_fim = data_fim.strftime('%d-%m-%Y')
+    response['Content-Disposition'] = f'attachment; filename="Historico_Checklists_{safe_inicio}_a_{safe_fim}.xlsx"'
     return response
 
 # =====================================================================

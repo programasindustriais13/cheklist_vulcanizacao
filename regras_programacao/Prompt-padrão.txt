@@ -1,0 +1,25 @@
+Leia primeiro o constitution.md da pasta regras_programacao.
+
+Agora utilize abordagem SPEC-DRIVEN.
+
+Crie uma SPEC baseada no template (SPEC_TEMPLATE.md que está na pasta regras_programacao) e somente depois implemente.
+
+[cole aqui sua demanda]
+
+Siga obrigatoriamente:
+- não criar novo projeto Django
+- não criar novo venv (usar o existente em venv/)
+- não duplicar código nem lógica
+- trabalhar apenas no código existente (app: core, projeto: checklist_system)
+- gerar migration se alterar models.py
+
+Utilize subagentes na ordem:
+1. Arquiteto (analisa e planeja)
+2. Backend (implementa o plano)
+3. QA (valida e testa)
+
+Ao final, entregue:
+- arquivos lidos
+- arquivos alterados
+- alterações feitas em cada arquivo
+- testes realizados (automatizados + manuais)
