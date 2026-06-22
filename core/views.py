@@ -219,9 +219,191 @@ def dashboard(request):
         'pending_corrections': pending_corrections,
     })
 
+
+@login_required
+@machine_management_required
+def analytical_dashboard(request):
+    today = timezone.localdate()
+    default_inicio = today.replace(day=1)  # 1º dia do mês corrente
+    default_fim = today
+
+    data_inicio_str = request.GET.get('data_inicio', '')
+    data_fim_str = request.GET.get('data_fim', '')
+
+    try:
+        data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else default_inicio
+    except ValueError:
+        data_inicio = default_inicio
+
+    try:
+        data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date() if data_fim_str else default_fim
+    except ValueError:
+        data_fim = default_fim
+
+    # Converter para datetime aware para comparação com DateTimeField
+    dt_inicio = timezone.make_aware(datetime.combine(data_inicio, dt_time.min))
+    dt_fim = timezone.make_aware(datetime.combine(data_fim, dt_time.max))
+
+    # Query de checklists no período
+    sessions = ChecklistSession.objects.filter(
+        created_at__gte=dt_inicio, created_at__lte=dt_fim
+    ).select_related('machine')
+
+    # Filter completed sessions
+    completed_sessions = [s for s in sessions if s.completed_at]
+
+    # --- 001. Gráfico de Evolução dos Checklists Realizados ---
+    delta_days = (data_fim - data_inicio).days
+    evolution_labels = []
+    evolution_data = []
+
+    if delta_days <= 30:
+        # Group by day
+        from datetime import timedelta
+        date_list = [data_inicio + timedelta(days=x) for x in range(delta_days + 1)]
+        counts = {d: 0 for d in date_list}
+        for s in completed_sessions:
+            s_date = timezone.localdate(s.completed_at)
+            if s_date in counts:
+                counts[s_date] += 1
+        evolution_labels = [d.strftime('%d/%m') for d in date_list]
+        evolution_data = [counts[d] for d in date_list]
+    elif delta_days <= 120:
+        # Group by week
+        from datetime import timedelta
+        start_monday = data_inicio - timedelta(days=data_inicio.weekday())
+        week_list = []
+        curr = start_monday
+        while curr <= data_fim:
+            week_list.append(curr)
+            curr += timedelta(days=7)
+
+        counts = {w: 0 for w in week_list}
+        for s in completed_sessions:
+            s_date = timezone.localdate(s.completed_at)
+            s_monday = s_date - timedelta(days=s_date.weekday())
+            if s_monday in counts:
+                counts[s_monday] += 1
+            elif s_monday < start_monday and s_date >= data_inicio:
+                counts[start_monday] += 1
+
+        evolution_labels = [f"Sem {w.strftime('%d/%m')}" for w in week_list]
+        evolution_data = [counts[w] for w in week_list]
+    else:
+        # Group by month
+        curr_year = data_inicio.year
+        curr_month = data_inicio.month
+        month_list = []
+        while (curr_year < data_fim.year) or (curr_year == data_fim.year and curr_month <= data_fim.month):
+            month_list.append((curr_year, curr_month))
+            if curr_month == 12:
+                curr_month = 1
+                curr_year += 1
+            else:
+                curr_month += 1
+
+        counts = {m: 0 for m in month_list}
+        month_names = {
+            1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+            7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+        }
+        for s in completed_sessions:
+            s_date = timezone.localdate(s.completed_at)
+            key = (s_date.year, s_date.month)
+            if key in counts:
+                counts[key] += 1
+        evolution_labels = [f"{month_names[m]}/{y}" for (y, m) in month_list]
+        evolution_data = [counts[m] for m in month_list]
+
+    # --- 002. Gráfico de Quantidade de Problemas Encontrados por Máquina ---
+    machines = Machine.objects.all().order_by('name')
+    problems_by_machine = {m.name: 0 for m in machines}
+
+    nc_items = ChecklistItemValue.objects.filter(
+        session__in=sessions,
+        status='NC'
+    ).select_related('session__machine')
+
+    for item in nc_items:
+        machine_name = item.session.machine.name
+        problems_by_machine[machine_name] = problems_by_machine.get(machine_name, 0) + 1
+
+    sorted_problems = sorted(problems_by_machine.items(), key=lambda x: x[1], reverse=True)
+    machine_labels = [x[0] for x in sorted_problems]
+    machine_data = [x[1] for x in sorted_problems]
+
+    # --- 003. Gráfico de Distribuição dos Tipos de Falha ---
+    section_map = {
+        'HIDRAULICA': 'Hidráulica',
+        'PNEUMATICA': 'Pneumática',
+        'SISTEMA_VULCANIZACAO': 'Vulcanização',
+        'SISTEMA_VAPOR': 'Vapor',
+        'ESTRUTURA': 'Estrutura',
+        'ELETRICA': 'Elétrica',
+    }
+
+    problems_by_section = {section_map[k]: 0 for k in section_map}
+    for item in nc_items:
+        clean_section = section_map.get(item.section, item.section)
+        problems_by_section[clean_section] = problems_by_section.get(clean_section, 0) + 1
+
+    section_labels = list(problems_by_section.keys())
+    section_data = list(problems_by_section.values())
+
+    # --- 004. Gráfico de Reincidência de Problemas ---
+    curr_year = data_inicio.year
+    curr_month = data_inicio.month
+    months_list = []
+    while (curr_year < data_fim.year) or (curr_year == data_fim.year and curr_month <= data_fim.month):
+        months_list.append((curr_year, curr_month))
+        if curr_month == 12:
+            curr_month = 1
+            curr_year += 1
+        else:
+            curr_month += 1
+
+    month_names = {
+        1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+        7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+    }
+    reincidence_labels = [f"{month_names[m]}/{y}" for (y, m) in months_list]
+
+    section_datasets = {
+        sec_code: {
+            'label': sec_name,
+            'data': [0] * len(months_list)
+        } for sec_code, sec_name in section_map.items()
+    }
+
+    for item in nc_items:
+        if item.session.completed_at:
+            s_date = timezone.localdate(item.session.completed_at)
+            key = (s_date.year, s_date.month)
+            if key in months_list:
+                month_idx = months_list.index(key)
+                if item.section in section_datasets:
+                    section_datasets[item.section]['data'][month_idx] += 1
+
+    reincidence_datasets = list(section_datasets.values())
+
+    return render(request, 'core/analytical_dashboard.html', {
+        'data_inicio': data_inicio.isoformat(),
+        'data_fim': data_fim.isoformat(),
+        'evolution_labels': json.dumps(evolution_labels),
+        'evolution_data': json.dumps(evolution_data),
+        'machine_labels': json.dumps(machine_labels),
+        'machine_data': json.dumps(machine_data),
+        'section_labels': json.dumps(section_labels),
+        'section_data': json.dumps(section_data),
+        'reincidence_labels': json.dumps(reincidence_labels),
+        'reincidence_datasets': json.dumps(reincidence_datasets),
+    })
+
+
 # =====================================================================
 # CHECKLIST EXECUTION VIEWS (State Machine Workflow)
 # =====================================================================
+
 
 @login_required
 def checklist_start(request):

@@ -1,0 +1,385 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard Analítico - Checklist Industrial{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Premium Dashboard Styles */
+    .dashboard-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 25px rgba(59, 130, 246, 0.15);
+    }
+    .filter-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 1rem;
+        padding: 1.25rem;
+        margin-bottom: 2rem;
+    }
+    .chart-card {
+        border-radius: 1rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 1px solid #f1f5f9;
+        height: 100%;
+        background-color: #ffffff;
+    }
+    .chart-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.05) !important;
+    }
+    .chart-container {
+        position: relative;
+        min-height: 280px;
+        width: 100%;
+    }
+    .empty-chart-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.9);
+        color: #64748b;
+        font-size: 0.95rem;
+        border-radius: 0.75rem;
+        pointer-events: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2">
+    <!-- Header -->
+    <div class="dashboard-header d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+        <div>
+            <h1 class="h3 fw-bold mb-1">
+                <i class="bi bi-bar-chart-line-fill me-2 text-warning"></i>Dashboard Analítico
+            </h1>
+            <p class="mb-0 opacity-75">Indicadores gerenciais e estatísticas históricas dos checklists de vulcanização.</p>
+        </div>
+        <div>
+            <a href="{% url 'dashboard' %}" class="btn btn-light fw-semibold text-primary">
+                <i class="bi bi-arrow-left me-1"></i> Voltar ao Início
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-card shadow-sm">
+        <form method="GET" action="{% url 'analytical_dashboard' %}" class="row g-3 align-items-end">
+            <div class="col-12 col-md-4">
+                <label for="data_inicio" class="form-label fw-bold text-secondary" style="font-size: 0.85rem;">
+                    <i class="bi bi-calendar-event me-1"></i> Data Inicial
+                </label>
+                <input type="date" name="data_inicio" id="data_inicio" value="{{ data_inicio }}" class="form-control rounded-3 border-secondary-subtle">
+            </div>
+            <div class="col-12 col-md-4">
+                <label for="data_fim" class="form-label fw-bold text-secondary" style="font-size: 0.85rem;">
+                    <i class="bi bi-calendar-event me-1"></i> Data Final
+                </label>
+                <input type="date" name="data_fim" id="data_fim" value="{{ data_fim }}" class="form-control rounded-3 border-secondary-subtle">
+            </div>
+            <div class="col-12 col-md-4 d-grid d-md-block">
+                <button type="submit" class="btn btn-primary fw-bold rounded-3 px-4 shadow-sm w-100" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border: none;">
+                    <i class="bi bi-funnel-fill me-1"></i> Filtrar Indicadores
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Charts Grid -->
+    <div class="row g-4 mb-4">
+        <!-- 001. Evolução dos Checklists Realizados -->
+        <div class="col-12 col-lg-6">
+            <div class="card chart-card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title fw-bold text-dark mb-1">Evolução de Inspeções</h5>
+                            <h6 class="card-subtitle text-muted fw-normal small">Checklists finalizados ao longo do tempo</h6>
+                        </div>
+                        <span class="badge bg-primary-subtle text-primary rounded-pill px-2.5 py-1">Linha / Tendência</span>
+                    </div>
+                    <div class="chart-container" id="chart-evolution-container">
+                        <canvas id="chart-evolution"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 002. Quantidade de Problemas Encontrados por Máquina -->
+        <div class="col-12 col-lg-6">
+            <div class="card chart-card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title fw-bold text-dark mb-1">Problemas por Máquina</h5>
+                            <h6 class="card-subtitle text-muted fw-normal small">Itens Não Conformes (NC) detectados por equipamento</h6>
+                        </div>
+                        <span class="badge bg-danger-subtle text-danger rounded-pill px-2.5 py-1">Crítico</span>
+                    </div>
+                    <div class="chart-container" id="chart-machine-container">
+                        <canvas id="chart-machine"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 003. Distribuição dos Tipos de Falha -->
+        <div class="col-12 col-lg-6">
+            <div class="card chart-card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title fw-bold text-dark mb-1">Distribuição de Falhas</h5>
+                            <h6 class="card-subtitle text-muted fw-normal small">Proporção de problemas agrupados por seção do checklist</h6>
+                        </div>
+                        <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill px-2.5 py-1">Pizza / Donut</span>
+                    </div>
+                    <div class="chart-container" id="chart-section-container">
+                        <canvas id="chart-section"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 004. Reincidência de Problemas -->
+        <div class="col-12 col-lg-6">
+            <div class="card chart-card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title fw-bold text-dark mb-1">Reincidência Mensal</h5>
+                            <h6 class="card-subtitle text-muted fw-normal small">Evolução do volume de falhas por seção a cada mês</h6>
+                        </div>
+                        <span class="badge bg-success-subtle text-success rounded-pill px-2.5 py-1">Histórico</span>
+                    </div>
+                    <div class="chart-container" id="chart-reincidence-container">
+                        <canvas id="chart-reincidence"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // --- Helper for Empty State overlays ---
+        function checkEmptyData(dataArray, containerId, message) {
+            const sum = dataArray.reduce((a, b) => a + b, 0);
+            if (sum === 0) {
+                const container = document.getElementById(containerId);
+                const overlay = document.createElement('div');
+                overlay.className = 'empty-chart-overlay';
+                overlay.innerHTML = `
+                    <i class="bi bi-info-circle mb-2 fs-3 text-secondary"></i>
+                    <span>${message}</span>
+                `;
+                container.appendChild(overlay);
+                return true;
+            }
+            return false;
+        }
+
+        // Parse Context Variables from Backend
+        const evolutionLabels = {{ evolution_labels|safe }};
+        const evolutionData = {{ evolution_data|safe }};
+        
+        const machineLabels = {{ machine_labels|safe }};
+        const machineData = {{ machine_data|safe }};
+        
+        const sectionLabels = {{ section_labels|safe }};
+        const sectionData = {{ section_data|safe }};
+        
+        const reincidenceLabels = {{ reincidence_labels|safe }};
+        const reincidenceDatasetsRaw = {{ reincidence_datasets|safe }};
+
+        // Harmonious Color Palette
+        const palette = [
+            '#0ea5e9', // Sky Blue
+            '#f43f5e', // Rose
+            '#f59e0b', // Amber
+            '#8b5cf6', // Violet
+            '#10b981', // Emerald
+            '#0d9488'  // Teal
+        ];
+
+        // --- 001. Chart Evolution (Line) ---
+        const ctxEvolution = document.getElementById('chart-evolution').getContext('2d');
+        const isEvolutionEmpty = checkEmptyData(evolutionData, 'chart-evolution-container', 'Nenhum checklist finalizado no período.');
+        
+        new Chart(ctxEvolution, {
+            type: 'line',
+            data: {
+                labels: evolutionLabels,
+                datasets: [{
+                    label: 'Checklists Finalizados',
+                    data: evolutionData,
+                    borderColor: '#2563eb',
+                    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.35,
+                    pointBackgroundColor: '#2563eb',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, color: '#64748b' },
+                        grid: { color: '#f1f5f9' }
+                    },
+                    x: {
+                        ticks: { color: '#64748b' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // --- 002. Chart Machine (Bar) ---
+        const ctxMachine = document.getElementById('chart-machine').getContext('2d');
+        const isMachineEmpty = checkEmptyData(machineData, 'chart-machine-container', 'Nenhum problema (NC) encontrado no período.');
+        
+        new Chart(ctxMachine, {
+            type: 'bar',
+            data: {
+                labels: machineLabels,
+                datasets: [{
+                    label: 'Itens Não Conformes',
+                    data: machineData,
+                    backgroundColor: '#f43f5e',
+                    borderRadius: 6,
+                    maxBarThickness: 45
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, color: '#64748b' },
+                        grid: { color: '#f1f5f9' }
+                    },
+                    x: {
+                        ticks: { color: '#64748b' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // --- 003. Chart Section (Donut) ---
+        const ctxSection = document.getElementById('chart-section').getContext('2d');
+        const isSectionEmpty = checkEmptyData(sectionData, 'chart-section-container', 'Sem falhas por tipo registradas.');
+        
+        new Chart(ctxSection, {
+            type: 'doughnut',
+            data: {
+                labels: sectionLabels,
+                datasets: [{
+                    data: sectionData,
+                    backgroundColor: palette,
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: '#334155',
+                            font: { size: 12, weight: '500' },
+                            padding: 15
+                        }
+                    }
+                },
+                cutout: '65%'
+            }
+        });
+
+        // --- 004. Chart Reincidence (Stacked Bar) ---
+        const ctxReincidence = document.getElementById('chart-reincidence').getContext('2d');
+        
+        // Sum total across all datasets to check for empty state
+        let reincidenceSum = 0;
+        const reincidenceDatasets = reincidenceDatasetsRaw.map((dataset, idx) => {
+            const data = dataset.data;
+            reincidenceSum += data.reduce((a, b) => a + b, 0);
+            return {
+                label: dataset.label,
+                data: data,
+                backgroundColor: palette[idx % palette.length],
+                borderRadius: 4
+            };
+        });
+
+        const isReincidenceEmpty = reincidenceSum === 0;
+        if (isReincidenceEmpty) {
+            checkEmptyData([], 'chart-reincidence-container', 'Nenhum histórico de falhas no período.');
+        }
+
+        new Chart(ctxReincidence, {
+            type: 'bar',
+            data: {
+                labels: reincidenceLabels,
+                datasets: reincidenceDatasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 12, color: '#334155', padding: 10 }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: { color: '#64748b' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        stacked: true,
+                        beginAtZero: true,
+                        ticks: { stepSize: 1, color: '#64748b' },
+                        grid: { color: '#f1f5f9' }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

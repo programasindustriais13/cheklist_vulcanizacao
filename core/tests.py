@@ -370,3 +370,40 @@ class ChecklistSystemTests(TestCase):
         response = self.client.get(reverse('machine_list'))
         self.assertEqual(response.status_code, 200)
 
+    def test_analytical_dashboard_access_and_filtering(self):
+        # 1. Perfis bloqueados: Inspetor e Líder
+        self.client.login(username='test_inspector', password='testpassword123')
+        response = self.client.get(reverse('analytical_dashboard'))
+        self.assertRedirects(response, reverse('dashboard'))
+
+        self.client.login(username='test_leader', password='testpassword123')
+        response = self.client.get(reverse('analytical_dashboard'))
+        self.assertRedirects(response, reverse('dashboard'))
+
+        # 2. Perfis permitidos: Analista
+        self.client.login(username='test_analyst', password='testpassword123')
+        response = self.client.get(reverse('analytical_dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'chart-evolution')
+        self.assertContains(response, 'chart-machine')
+        self.assertContains(response, 'chart-section')
+        self.assertContains(response, 'chart-reincidence')
+        
+        # Verificar chaves de contexto dos gráficos
+        self.assertIn('evolution_labels', response.context)
+        self.assertIn('evolution_data', response.context)
+        self.assertIn('machine_labels', response.context)
+        self.assertIn('machine_data', response.context)
+        self.assertIn('section_labels', response.context)
+        self.assertIn('section_data', response.context)
+        self.assertIn('reincidence_labels', response.context)
+        self.assertIn('reincidence_datasets', response.context)
+
+        # 3. Teste de filtragem por período
+        response_filtered = self.client.get(
+            reverse('analytical_dashboard') + '?data_inicio=2026-06-01&data_fim=2026-06-15'
+        )
+        self.assertEqual(response_filtered.status_code, 200)
+        self.assertEqual(response_filtered.context['data_inicio'], '2026-06-01')
+        self.assertEqual(response_filtered.context['data_fim'], '2026-06-15')
+

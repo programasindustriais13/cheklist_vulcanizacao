@@ -94,3 +94,42 @@ Resumo das alterações:
 
 Nenhuma migration necessária (sem alteração de models).
 Testes automatizados: 11/11 OK.
+
+
+================================================================================
+ALTERAÇÃO: Criação do Dashboard Analítico (Painel Gráfico) e Refatoração do Menu
+Data: 2026-06-22
+================================================================================
+
+Arquivos alterados/criados:
+- core/urls.py
+- core/views.py
+- core/templates/core/base.html
+- core/templates/core/analytical_dashboard.html [NEW]
+- core/tests.py
+
+Resumo das alterações:
+
+1. ROTA E VISUALIZAÇÃO:
+   - Adicionada rota '/dashboard/' mapeando para views.analytical_dashboard com nome 'analytical_dashboard'.
+   - Adicionada view analytical_dashboard restrita via @login_required e @machine_management_required (Analistas, Diretores e Superusers).
+   - A view herda o filtro de período e calcula os dados para os 4 gráficos utilizando agrupamento em Python para total compatibilidade SQLite/MySQL.
+
+2. ATUALIZAÇÕES DO MENU (UI):
+   - Renomeado o link "Dashboard" atual para "Início" no template base.html.
+   - Adicionado novo link "Dashboard Analítico" visível apenas a perfis autorizados (Analista, Diretor e Superuser).
+
+3. COMPONENTE GRÁFICO (TEMPLATE):
+   - Criado o template analytical_dashboard.html herdando base.html.
+   - Utilização de Chart.js via CDN para plotagem dos 4 gráficos:
+     * 001. Evolução de Checklists Realizados (Linha/Tendência - agrupamento dinâmico por dia, semana ou mês com base na amplitude do período).
+     * 002. Quantidade de Problemas Encontrados por Máquina (Barras, ordenado decrescente).
+     * 003. Distribuição dos Tipos de Falha (Donut, com cores harmoniosas).
+     * 004. Reincidência de Problemas (Barras Empilhadas por Mês e Seção).
+   - Integração completa com o formulário de Filtro de Período, atualizando os gráficos dinamicamente.
+   - Adicionado tratamento para gráficos sem dados no período selecionado (exibição de overlay informativo de estado vazio).
+
+4. TESTES E VALIDAÇÃO:
+   - Adicionados testes automatizados cobrindo RBAC de acesso (bloqueio de mecânicos/operadores, liberação de analistas), presença de gráficos no HTML e passagem do filtro de período.
+   - Testes automatizados: 12/12 OK.
+
