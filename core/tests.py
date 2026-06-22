@@ -407,3 +407,76 @@ class ChecklistSystemTests(TestCase):
         self.assertEqual(response_filtered.context['data_inicio'], '2026-06-01')
         self.assertEqual(response_filtered.context['data_fim'], '2026-06-15')
 
+    def test_block_inspected_machine_selection_pending_approval(self):
+        # Create a second machine
+        machine2 = Machine.objects.create(name='Test Machine 102')
+
+        self.client.login(username='test_inspector', password='testpassword123')
+
+        # 1. Start and finalize a checklist on self.machine so it is AGUARDANDO_LIDER
+        session1 = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            status='AGUARDANDO_LIDER',
+            started_at=timezone.now(),
+            completed_at=timezone.now()
+        )
+
+        # 2. Go to the checklist start page, check that machine 101 is NOT in the queryset/options
+        response = self.client.get(reverse('checklist_start'))
+        self.assertEqual(response.status_code, 200)
+        
+        # Check that machine2 is in the choices, but self.machine (101) is not
+        form = response.context['form']
+        machine_choices = [c[0] for c in form.fields['machine'].choices]
+        self.assertIn(machine2.id, machine_choices)
+        self.assertNotIn(self.machine.id, machine_choices)
+
+        # 3. Security validation: Attempt to POST self.machine (101) even if it's not visible
+        response_post = self.client.post(reverse('checklist_start'), {
+            'machine': self.machine.id,
+            'leader': self.leader.id
+        })
+        self.assertEqual(response_post.status_code, 200)
+        self.assertFormError(
+            response_post,
+            'form',
+            'machine',
+            "Você já realizou uma inspeção nesta máquina que está aguardando a aprovação do Líder."
+        )
+
+        # 4. If status changes to APROVADO, it should become selectable again
+        session1.status = 'APROVADO'
+        session1.save()
+
+        response = self.client.get(reverse('checklist_start'))
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        machine_choices = [c[0] for c in form.fields['machine'].choices]
+        self.assertIn(self.machine.id, machine_choices)
+
+        # 5. If status becomes REPROVADO_LIDER, it should be blocked again
+        session1.status = 'REPROVADO_LIDER'
+        session1.save()
+
+        response = self.client.get(reverse('checklist_start'))
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        machine_choices = [c[0] for c in form.fields['machine'].choices]
+        self.assertNotIn(self.machine.id, machine_choices)
+
+        # 6. Another inspector should NOT be blocked from selecting the machine
+        other_inspector = User.objects.create_user(
+            username='other_inspector',
+            password='testpassword123',
+            specialty='Mecânico',
+            is_active=True
+        )
+        self.client.login(username='other_inspector', password='testpassword123')
+        response = self.client.get(reverse('checklist_start'))
+        self.assertEqual(response.status_code, 200)
+        form = response.context['form']
+        machine_choices = [c[0] for c in form.fields['machine'].choices]
+        self.assertIn(self.machine.id, machine_choices)
+

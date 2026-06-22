@@ -44,6 +44,53 @@ class ChecklistStartForm(forms.ModelForm):
         empty_label='Selecione o Líder de Turno',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user:
+            blocked_machine_ids = ChecklistSession.objects.filter(
+                inspector=user,
+                status__in=['AGUARDANDO_LIDER', 'REPROVADO_LIDER']
+            ).values_list('machine_id', flat=True)
+            
+            # Keep queryset as all machines so that validation is possible on POST
+            self.fields['machine'].queryset = Machine.objects.all().order_by('name')
+            
+            # Filter the widget choices
+            filtered_choices = []
+            for val, label in list(self.fields['machine'].choices):
+                if not val:  # Empty label choice
+                    filtered_choices.append((val, label))
+                else:
+                    try:
+                        actual_val = val.value if hasattr(val, 'value') else val
+                        val_id = int(actual_val)
+                        if val_id not in blocked_machine_ids:
+                            filtered_choices.append((val, label))
+                    except (ValueError, TypeError):
+                        try:
+                            val_id = int(str(val))
+                            if val_id not in blocked_machine_ids:
+                                filtered_choices.append((val, label))
+                        except (ValueError, TypeError):
+                            pass
+            self.fields['machine'].choices = filtered_choices
+
+    def clean(self):
+        cleaned_data = super().clean()
+        machine = cleaned_data.get('machine')
+        if machine and self.user:
+            has_pending = ChecklistSession.objects.filter(
+                machine=machine,
+                inspector=self.user,
+                status__in=['AGUARDANDO_LIDER', 'REPROVADO_LIDER']
+            ).exists()
+            if has_pending:
+                self.add_error('machine', "Você já realizou uma inspeção nesta máquina que está aguardando a aprovação do Líder.")
+        return cleaned_data
+
     class Meta:
         model = ChecklistSession
         fields = ['machine', 'leader']

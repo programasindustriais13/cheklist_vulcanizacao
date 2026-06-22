@@ -417,7 +417,7 @@ def checklist_start(request):
         return redirect('checklist_execute', session_id=active_session.id)
 
     if request.method == 'POST':
-        form = ChecklistStartForm(request.POST)
+        form = ChecklistStartForm(request.POST, user=request.user)
         if form.is_valid():
             with transaction.atomic():
                 session = form.save(commit=False)
@@ -446,7 +446,7 @@ def checklist_start(request):
             messages.success(request, "Inspeção iniciada!")
             return redirect('checklist_execute', session_id=session.id)
     else:
-        form = ChecklistStartForm()
+        form = ChecklistStartForm(user=request.user)
         
     context = {
         'form': form,

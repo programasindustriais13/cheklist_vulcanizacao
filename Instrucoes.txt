@@ -133,3 +133,30 @@ Resumo das alterações:
    - Adicionados testes automatizados cobrindo RBAC de acesso (bloqueio de mecânicos/operadores, liberação de analistas), presença de gráficos no HTML e passagem do filtro de período.
    - Testes automatizados: 12/12 OK.
 
+
+================================================================================
+ALTERAÇÃO: Bloqueio de Máquina já Inspecionada Pendente de Aprovação do Líder
+Data: 2026-06-22
+================================================================================
+
+Arquivos alterados:
+- core/forms.py
+- core/views.py
+- core/tests.py
+
+Resumo das alterações:
+
+1. FILTRAGEM DO DROPDOWN NO FRONTEND (FORM):
+   - Modificado o formulário `ChecklistStartForm` em `core/forms.py` para receber opcionalmente o parâmetro `user` no `__init__`.
+   - Caso `user` seja fornecido, o queryset da máquina continua contendo todas as máquinas (para validação do POST), mas a propriedade `choices` do campo de seleção é filtrada para excluir as máquinas que possuam checklists pendentes de aprovação (`AGUARDANDO_LIDER` ou `REPROVADO_LIDER`) criados pelo próprio inspetor.
+
+2. VALIDAÇÃO DE SEGURANÇA NO BACKEND (FORM CLEAN):
+   - Adicionada validação no método `clean()` do `ChecklistStartForm` para verificar se a máquina submetida possui algum checklist pendente de aprovação feito pelo próprio inspetor.
+   - Caso possua, gera um erro de validação impedindo a criação do checklist com a mensagem: *"Você já realizou uma inspeção nesta máquina que está aguardando a aprovação do Líder."*
+
+3. INSTANCIAÇÃO NA VIEW (VIEWS):
+   - A view `checklist_start` em `core/views.py` foi atualizada para instanciar o formulário passando o `user=request.user` tanto no método GET quanto no POST.
+
+4. TESTES DE INTEGRAÇÃO E RBAC (TESTS):
+   - Adicionado o teste `test_block_inspected_machine_selection_pending_approval` em `core/tests.py` cobrindo o bloqueio na listagem de choices, a rejeição com erro customizado no POST de máquina bloqueada, liberação de máquina após aprovação, restrição após rejeição do líder e permissão de acesso para outros inspetores.
+   - Testes automatizados: 13/13 OK.
