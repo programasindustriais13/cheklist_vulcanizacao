@@ -57,7 +57,7 @@ a nova versão para o GitHub:
    > git add .
 
 2. Faça o commit descrevendo o que foi implementado:
-   > git commit -m "Melhoria: adicionado [descreva a melhoria aqui]"
+   > git commit -m "Melhoria: adicionado Regra de não selecionar maquina em aprovação"
 
 3. Envie para o GitHub:
    > git push origin main
@@ -160,3 +160,46 @@ Resumo das alterações:
 4. TESTES DE INTEGRAÇÃO E RBAC (TESTS):
    - Adicionado o teste `test_block_inspected_machine_selection_pending_approval` em `core/tests.py` cobrindo o bloqueio na listagem de choices, a rejeição com erro customizado no POST de máquina bloqueada, liberação de máquina após aprovação, restrição após rejeição do líder e permissão de acesso para outros inspetores.
    - Testes automatizados: 13/13 OK.
+
+================================================================================
+ALTERAÇÃO: Filtros Avançados, Campo de Observação Geral e Modal Responsivo
+Data: 2026-06-23
+================================================================================
+
+Arquivos alterados/criados:
+- core/models.py
+- core/views.py
+- core/templates/core/dashboard.html
+- core/templates/core/checklist_form.html
+- core/static/core/style.css
+- core/tests.py
+- core/migrations/0005_checklistsession_general_observations.py [NEW]
+
+Resumo das alterações:
+
+1. BANCO DE DADOS (MODELS E MIGRATIONS):
+   - Adicionado o campo `general_observations` (TextField, opcional) na classe `ChecklistSession` em `core/models.py`.
+   - Gerada e aplicada migration incremental (`0005_checklistsession_general_observations.py`).
+
+2. EXECUÇÃO DE CHECKLIST E SALVAMENTO (VIEWS E FORMS):
+   - Atualizada a view `checklist_execute` para salvar as observações gerais tanto na pausa (`action=pause`) quanto na finalização (`action=finalize`).
+   - Adicionada a área de "Estado Geral da Máquina" ao final do formulário `checklist_form.html`. A área é somente leitura (`readonly`) se o checklist não estiver `IN_PROGRESS`.
+
+3. FILTROS AVANÇADOS NA DASHBOARD (HTML E VIEWS):
+   - Expandido o formulário de filtros do Dashboard (`dashboard.html`) para abranger: Data (Início/Fim), Máquina (dropdown), Inspetor (dropdown), Líder (dropdown), Status (dropdown) e NC (busca textual "Resumo da NC").
+   - Atualizada a view `dashboard` para filtrar a queryset combinando todos os parâmetros de busca fornecidos via GET e evitando duplicidade de linhas usando `.distinct()`.
+   - O link de exportação consolidada do histórico repassa todos os filtros ativos na URL.
+
+4. EXPORTAÇÃO EXCEL ATUALIZADA (VIEWS):
+   - `export_dashboard_excel`: Atualizada para respeitar os filtros combinados aplicados e incluir a 9ª coluna "Observações Gerais".
+   - `export_checklist_excel`: Inclui as "Obs. Gerais da Máquina" mesclada abaixo do Histórico de Pausas no bloco de metadados.
+
+5. MODAL DE OBSERVAÇÕES RESPONSIVO (MOBILE):
+   - Criado modal Bootstrap `#observationModal` com a classe `modal-fullscreen-sm-down` em `checklist_form.html`.
+   - Adicionado botão de expandir observação (`.btn-obs-modal`) ao lado da textarea de cada item.
+   - Implementado script em JS para sincronização dinâmica de leitura/escrita e controle de readonly entre o modal e as textareas correspondentes.
+   - Adicionada media query customizada no `style.css` definindo `width: 95%` para o modal em viewports menores que 576px.
+
+6. TESTES E VALIDAÇÃO:
+   - Adizados testes automatizados cobrindo a persistência do campo de observações gerais na pausa/finalização, exibição no HTML, exportações Excel e validação dos filtros combinados.
+   - Testes automatizados: 15/15 OK.

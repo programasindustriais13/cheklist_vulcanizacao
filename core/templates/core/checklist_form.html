@@ -232,12 +232,23 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <textarea name="observations_{{ item.id }}" 
-                                                  id="obs_{{ item.id }}" 
-                                                  rows="1" 
-                                                  class="form-control obs-textarea" 
-                                                  placeholder="Insira detalhes..."
-                                                  {% if session.status != 'IN_PROGRESS' %}readonly{% endif %}>{{ item.observations|default:"" }}</textarea>
+                                        <div class="d-flex gap-1 align-items-center">
+                                            <textarea name="observations_{{ item.id }}" 
+                                                      id="obs_{{ item.id }}" 
+                                                      rows="1" 
+                                                      class="form-control obs-textarea" 
+                                                      placeholder="Insira detalhes..."
+                                                      {% if session.status != 'IN_PROGRESS' %}readonly{% endif %}>{{ item.observations|default:"" }}</textarea>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-secondary btn-obs-modal px-2" 
+                                                    data-item-id="{{ item.id }}"
+                                                    data-item-name="{{ item.item_name }}"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#observationModal"
+                                                    title="Expandir observação">
+                                                <i class="bi bi-arrows-angle-expand"></i>
+                                            </button>
+                                        </div>
                                         <div class="text-danger small mt-1 d-none" id="error_{{ item.id }}">
                                             Observação obrigatória para Não Conforme (NC).
                                         </div>
@@ -250,6 +261,23 @@
                 </div>
             </div>
             {% endfor %}
+
+            <!-- Observação Geral do Checklist (Estado Geral da Máquina) -->
+            <div class="card premium-card border-0 shadow-sm mb-4">
+                <div class="card-body">
+                    <h5 class="fw-bold text-primary mb-3 border-bottom pb-2">
+                        <i class="bi bi-chat-left-text me-2"></i> Estado Geral da Máquina (Observações Gerais)
+                    </h5>
+                    <div class="mb-2">
+                        <textarea name="general_observations" 
+                                  id="general_observations" 
+                                  rows="3" 
+                                  class="form-control" 
+                                  placeholder="Digite notas livres sobre as condições gerais que observou na máquina..."
+                                  {% if session.status != 'IN_PROGRESS' %}readonly{% endif %}>{{ session.general_observations|default:"" }}</textarea>
+                    </div>
+                </div>
+            </div>
 
             <!-- Action Controls State Machine -->
             <div class="card premium-card border-0 shadow-sm p-4 mb-5">
@@ -324,6 +352,36 @@
                 <button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" id="btnConfirmPause" class="btn btn-warning fw-semibold rounded-3" disabled>
                     Confirmar Pausa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Observações Individuais (Responsivo e confortável para mobile) -->
+<div class="modal fade" id="observationModal" tabindex="-1" aria-labelledby="observationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 bg-primary text-white">
+                <h5 class="modal-title fw-bold" id="observationModalLabel">
+                    <i class="bi bi-pencil-square me-2"></i> Observações do Item
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-4 text-start">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold text-secondary small">Item Selecionado</label>
+                    <div id="obsModalItemName" class="fw-bold text-dark fs-6 bg-light p-2 rounded-2"></div>
+                </div>
+                <div class="mb-3">
+                    <label for="obsModalTextarea" class="form-label fw-semibold text-secondary small">Observações/Detalhamento *</label>
+                    <textarea class="form-control" id="obsModalTextarea" rows="6" placeholder="Digite aqui as observações ou justificativas do item..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnSaveObsModal" class="btn btn-primary-custom fw-semibold rounded-3">
+                    Salvar Observação
                 </button>
             </div>
         </div>
@@ -463,6 +521,47 @@ document.addEventListener("DOMContentLoaded", function () {
                 hiddenAction.value = "pause";
                 hiddenPauseReason.value = reason;
                 checklistForm.submit();
+            }
+        });
+    }
+
+    // Modal de Observações Individuais
+    const obsModal = document.getElementById("observationModal");
+    const obsModalTextarea = document.getElementById("obsModalTextarea");
+    const obsModalItemName = document.getElementById("obsModalItemName");
+    const btnSaveObsModal = document.getElementById("btnSaveObsModal");
+    let activeItemTextarea = null;
+
+    if (obsModal) {
+        obsModal.addEventListener("show.bs.modal", function (event) {
+            const button = event.relatedTarget;
+            const itemId = button.getAttribute("data-item-id");
+            const itemName = button.getAttribute("data-item-name");
+            
+            activeItemTextarea = document.getElementById("obs_" + itemId);
+            obsModalItemName.textContent = itemName;
+            obsModalTextarea.value = activeItemTextarea.value;
+
+            if (activeItemTextarea.hasAttribute("readonly")) {
+                obsModalTextarea.setAttribute("readonly", "true");
+                btnSaveObsModal.style.display = "none";
+            } else {
+                obsModalTextarea.removeAttribute("readonly");
+                btnSaveObsModal.style.display = "inline-block";
+            }
+        });
+
+        btnSaveObsModal.addEventListener("click", function () {
+            if (activeItemTextarea) {
+                activeItemTextarea.value = obsModalTextarea.value;
+                // Dispatch input event to trigger styles update and validation checking
+                activeItemTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+                
+                // Hide modal via Bootstrap API
+                const modalInstance = bootstrap.Modal.getInstance(obsModal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
             }
         });
     }

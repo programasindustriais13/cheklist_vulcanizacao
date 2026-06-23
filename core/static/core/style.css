@@ -261,3 +261,15 @@ input[type="radio"][value="NC"]:checked + .btn-radio {
     max-width: 480px;
     margin: 4rem auto;
 }
+
+/* Responsive Observations Modal Dialog for smartphones */
+@media (max-width: 575.98px) {
+    #observationModal .modal-dialog {
+        width: 95% !important;
+        max-width: 95% !important;
+        margin: 1.5rem auto !important;
+    }
+    #observationModal .modal-content {
+        border-radius: 12px !important;
+    }
+}

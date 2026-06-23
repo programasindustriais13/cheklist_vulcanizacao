@@ -155,17 +155,41 @@ def dashboard(request):
     dt_inicio = timezone.make_aware(datetime.combine(data_inicio, dt_time.min))
     dt_fim = timezone.make_aware(datetime.combine(data_fim, dt_time.max))
 
+    # --- FILTROS AVANÇADOS (parâmetros GET) ---
+    maquina_id = request.GET.get('maquina', '')
+    inspector_id = request.GET.get('inspector', '')
+    leader_id = request.GET.get('leader_filter', '')
+    status_filter = request.GET.get('status_filter', '')
+    nc_query = request.GET.get('nc_query', '')
+
     # --- QUERYSET DE SESSÕES (filtrada por período) ---
     if user.is_technician:
         # Technicians only see checklists they inspected
         sessions = ChecklistSession.objects.filter(
             inspector=user, created_at__gte=dt_inicio, created_at__lte=dt_fim
-        ).select_related('machine', 'inspector').order_by('-created_at')
+        ).select_related('machine', 'inspector', 'leader').order_by('-created_at')
     else:
         # Leaders, Analysts, and Directors see all checklists
         sessions = ChecklistSession.objects.filter(
             created_at__gte=dt_inicio, created_at__lte=dt_fim
-        ).select_related('machine', 'inspector').order_by('-created_at')
+        ).select_related('machine', 'inspector', 'leader').order_by('-created_at')
+
+    # Aplicar filtros adicionais combinados
+    if maquina_id:
+        sessions = sessions.filter(machine_id=maquina_id)
+    if inspector_id:
+        sessions = sessions.filter(inspector_id=inspector_id)
+    if leader_id:
+        sessions = sessions.filter(leader_id=leader_id)
+    if status_filter:
+        sessions = sessions.filter(status=status_filter)
+    if nc_query:
+        sessions = sessions.filter(items__status='NC', items__item_name__icontains=nc_query).distinct()
+
+    # Dropdowns de Filtro
+    machines = Machine.objects.all().order_by('name')
+    inspectors = User.objects.filter(is_active=True).exclude(specialty='Lider').order_by('first_name', 'username')
+    leaders = User.objects.filter(specialty='Lider', is_active=True).order_by('first_name', 'username')
 
     # --- KPIs CALCULADOS NO BACKEND ---
     approved_count = sessions.filter(status='APROVADO').count()
@@ -217,6 +241,14 @@ def dashboard(request):
         'pending_leader': pending_leader,
         'pending_analyst': pending_analyst,
         'pending_corrections': pending_corrections,
+        'machines': machines,
+        'inspectors': inspectors,
+        'leaders': leaders,
+        'maquina_id': maquina_id,
+        'inspector_id': inspector_id,
+        'leader_id': leader_id,
+        'status_filter': status_filter,
+        'nc_query': nc_query,
     })
 
 
@@ -475,7 +507,7 @@ def checklist_execute(request, session_id):
     if is_editable:
         if request.user != session.inspector and not (request.user.is_director or request.user.is_analyst or request.user.is_superuser):
             return HttpResponseForbidden("Você não tem permissão para editar o checklist de outro inspetor.")
-            
+
     # Handle state transitions and execution POST actions
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -487,20 +519,20 @@ def checklist_execute(request, session_id):
             
         if action == 'pause':
             pause_reason = request.POST.get('pause_reason', '').strip()
+            general_obs = request.POST.get('general_observations', '').strip()
             if not pause_reason:
-                messages.error(request, "O motivo da pausa é obrigatório.")
+                messages.error(request, "É necessário informar o motivo da pausa.")
                 return redirect('checklist_execute', session_id=session.id)
-
-            # Save progress so far (no strict validation required for pauses)
+            
             with transaction.atomic():
                 for item in items:
                     status_val = request.POST.get(f'status_{item.id}')
                     obs_val = request.POST.get(f'observations_{item.id}', '').strip()
-                    
                     item.status = status_val if status_val in ['C', 'NC'] else None
                     item.observations = obs_val
                     item.save()
-                
+
+                session.general_observations = general_obs
                 session.status = 'PAUSED'
                 session.paused_at = timezone.now()
                 session.save()
@@ -535,6 +567,7 @@ def checklist_execute(request, session_id):
         elif action == 'finalize':
             errors = []
             updated_items = []
+            general_obs = request.POST.get('general_observations', '').strip()
             
             with transaction.atomic():
                 for item in items:
@@ -555,6 +588,9 @@ def checklist_execute(request, session_id):
                 # Save progress even if validation failed
                 for item in updated_items:
                     item.save()
+                
+                session.general_observations = general_obs
+                session.save()
                     
                 if errors:
                     # Regroup items for rendering with errors
@@ -586,7 +622,7 @@ def checklist_execute(request, session_id):
                 
             messages.success(request, "Checklist finalizado! Aguardando aprovação do Líder de Turno.")
             return redirect('dashboard')
-            
+
     # Group items for rendering
     grouped_items = {}
     for section_code, section_name in sections_map.items():
@@ -812,9 +848,18 @@ def export_checklist_excel(request, session_id):
         ws.cell(row=current_row, column=col).alignment = Alignment(vertical='center', wrap_text=True)
     ws.row_dimensions[current_row].height = None
     current_row += 1
+
+    ws.cell(row=current_row, column=1, value="Obs. Gerais da Máquina:").font = meta_label_font
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.cell(row=current_row, column=2, value=session.general_observations or "Nenhuma observação registrada").font = meta_value_font
+    
+    for col in range(1, 5):
+        ws.cell(row=current_row, column=col).border = thin_border
+        ws.cell(row=current_row, column=col).alignment = Alignment(vertical='center', wrap_text=True)
+    ws.row_dimensions[current_row].height = None
+    current_row += 1
         
     current_row += 1 # Empty row
-    
     # Section header columns
     headers = ["Seção", "Item de Inspeção", "Status", "Observações"]
     for col_idx, h in enumerate(headers, 1):
@@ -915,9 +960,26 @@ def export_dashboard_excel(request):
     dt_inicio = timezone.make_aware(datetime.combine(data_inicio, dt_time.min))
     dt_fim = timezone.make_aware(datetime.combine(data_fim, dt_time.max))
 
+    maquina_id = request.GET.get('maquina', '')
+    inspector_id = request.GET.get('inspector', '')
+    leader_id = request.GET.get('leader_filter', '')
+    status_filter = request.GET.get('status_filter', '')
+    nc_query = request.GET.get('nc_query', '')
+
     sessions = ChecklistSession.objects.filter(
         created_at__gte=dt_inicio, created_at__lte=dt_fim
     ).select_related('machine', 'inspector').order_by('-created_at')
+
+    if maquina_id:
+        sessions = sessions.filter(machine_id=maquina_id)
+    if inspector_id:
+        sessions = sessions.filter(inspector_id=inspector_id)
+    if leader_id:
+        sessions = sessions.filter(leader_id=leader_id)
+    if status_filter:
+        sessions = sessions.filter(status=status_filter)
+    if nc_query:
+        sessions = sessions.filter(items__status='NC', items__item_name__icontains=nc_query).distinct()
     
     wb = Workbook()
     ws = wb.active
@@ -934,7 +996,7 @@ def export_dashboard_excel(request):
     thin_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
     
     # Title Row
-    ws.merge_cells('A1:G1')
+    ws.merge_cells('A1:I1')
     ws['A1'] = "HISTÓRICO CONSOLIDADO DE CHECKLISTS"
     ws['A1'].font = title_font
     ws['A1'].fill = title_fill
@@ -942,7 +1004,7 @@ def export_dashboard_excel(request):
     ws.row_dimensions[1].height = 45
     
     # Header columns
-    headers = ["ID", "Data Criação", "Máquina", "Inspetor", "Líder", "Status", "Não Conformidades", "Histórico de Pausas"]
+    headers = ["ID", "Data Criação", "Máquina", "Inspetor", "Líder", "Status", "Não Conformidades", "Histórico de Pausas", "Observações Gerais"]
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col_idx, value=h)
         cell.font = header_font
@@ -964,7 +1026,7 @@ def export_dashboard_excel(request):
             reason = log.pause_reason or "Sem motivo"
             pause_details.append(f"[{dt_str}] {reason}")
         pause_history_str = " | ".join(pause_details) if pause_details else "Nenhuma"
-
+ 
         ws.cell(row=current_row, column=1, value=s.id).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=2, value=s.created_at.astimezone().strftime("%d/%m/%Y %H:%M")).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=3, value=s.machine.name)
@@ -973,8 +1035,9 @@ def export_dashboard_excel(request):
         ws.cell(row=current_row, column=6, value=s.get_status_display()).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=7, value=nc_summary)
         ws.cell(row=current_row, column=8, value=pause_history_str)
+        ws.cell(row=current_row, column=9, value=s.general_observations or "")
         
-        for col in range(1, 9):
+        for col in range(1, 10):
             cell = ws.cell(row=current_row, column=col)
             cell.font = cell_font
             cell.border = thin_border
@@ -991,6 +1054,7 @@ def export_dashboard_excel(request):
     ws.column_dimensions['F'].width = 18
     ws.column_dimensions['G'].width = 60
     ws.column_dimensions['H'].width = 50
+    ws.column_dimensions['I'].width = 40
     
     output = io.BytesIO()
     wb.save(output)

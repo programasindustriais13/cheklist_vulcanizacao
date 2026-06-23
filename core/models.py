@@ -61,6 +61,7 @@ class ChecklistSession(models.Model):
     leader = models.ForeignKey(User, on_delete=models.PROTECT, related_name='led_sessions', verbose_name='Líder de Turno', null=True)
     inspector = models.ForeignKey(User, on_delete=models.PROTECT, related_name='inspections', verbose_name='Inspetor')
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='NOT_STARTED', verbose_name='Status')
+    general_observations = models.TextField(null=True, blank=True, verbose_name='Observações Gerais (Estado da Máquina)')
     
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Criado em')
     started_at = models.DateTimeField(null=True, blank=True, verbose_name='Iniciado em')

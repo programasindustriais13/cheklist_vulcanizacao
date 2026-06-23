@@ -12,7 +12,7 @@
     </div>
     <div class="col-md-6 text-md-end mt-3 mt-md-0">
         {% if user.can_export_excel %}
-        <a href="{% url 'export_dashboard_excel' %}?data_inicio={{ data_inicio }}&data_fim={{ data_fim }}" class="btn btn-outline-success shadow-sm me-2">
+        <a href="{% url 'export_dashboard_excel' %}?data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&maquina={{ maquina_id }}&inspector={{ inspector_id }}&leader_filter={{ leader_id }}&status_filter={{ status_filter }}&nc_query={{ nc_query }}" class="btn btn-outline-success shadow-sm me-2">
             <i class="bi bi-file-earmark-excel me-1"></i> Exportar Histórico (Excel)
         </a>
         {% endif %}
@@ -24,30 +24,80 @@
     </div>
 </div>
 
-<!-- Filtro por Período -->
+<!-- Filtros Avançados -->
 <div class="card premium-card border-0 shadow-sm mb-4 animate-fade-in">
     <div class="card-body py-3 px-4">
-        <form method="GET" action="{% url 'dashboard' %}" class="row g-2 align-items-end" id="form-filtro-periodo">
-            <div class="col-auto">
+        <form method="GET" action="{% url 'dashboard' %}" class="row g-3 align-items-end" id="form-filtro-periodo">
+            <div class="col-md-2 col-sm-6">
                 <label for="data_inicio" class="form-label small fw-semibold text-muted mb-1">
                     <i class="bi bi-calendar-event me-1"></i>Data Inicial
                 </label>
                 <input type="date" id="data_inicio" name="data_inicio" class="form-control form-control-sm" value="{{ data_inicio }}">
             </div>
-            <div class="col-auto">
+            <div class="col-md-2 col-sm-6">
                 <label for="data_fim" class="form-label small fw-semibold text-muted mb-1">
                     <i class="bi bi-calendar-event me-1"></i>Data Final
                 </label>
                 <input type="date" id="data_fim" name="data_fim" class="form-control form-control-sm" value="{{ data_fim }}">
             </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-sm btn-primary-custom">
+            <div class="col-md-2 col-sm-6">
+                <label for="maquina" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-cpu me-1"></i>Máquina
+                </label>
+                <select name="maquina" id="maquina" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                    {% for m in machines %}
+                        <option value="{{ m.id }}" {% if m.id|stringformat:"s" == maquina_id %}selected{% endif %}>{{ m.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 col-sm-6">
+                <label for="inspector" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-person me-1"></i>Inspetor
+                </label>
+                <select name="inspector" id="inspector" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    {% for i in inspectors %}
+                        <option value="{{ i.id }}" {% if i.id|stringformat:"s" == inspector_id %}selected{% endif %}>{{ i.get_full_name|default:i.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 col-sm-6">
+                <label for="leader_filter" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-person-workspace me-1"></i>Líder
+                </label>
+                <select name="leader_filter" id="leader_filter" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    {% for l in leaders %}
+                        <option value="{{ l.id }}" {% if l.id|stringformat:"s" == leader_id %}selected{% endif %}>{{ l.get_full_name|default:l.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 col-sm-6">
+                <label for="status_filter" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-info-circle me-1"></i>Status
+                </label>
+                <select name="status_filter" id="status_filter" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="IN_PROGRESS" {% if status_filter == 'IN_PROGRESS' %}selected{% endif %}>Em Andamento</option>
+                    <option value="PAUSED" {% if status_filter == 'PAUSED' %}selected{% endif %}>Pausado</option>
+                    <option value="AGUARDANDO_LIDER" {% if status_filter == 'AGUARDANDO_LIDER' %}selected{% endif %}>Aguardando Líder</option>
+                    <option value="APROVADO" {% if status_filter == 'APROVADO' %}selected{% endif %}>Aprovado</option>
+                    <option value="REPROVAR_FINAL_REFAZER" {% if status_filter == 'REPROVAR_FINAL_REFAZER' %}selected{% endif %}>Reprovar Final</option>
+                </select>
+            </div>
+            <div class="col-md-3 col-sm-12">
+                <label for="nc_query" class="form-label small fw-semibold text-muted mb-1">
+                    <i class="bi bi-search me-1"></i>Resumo da NC
+                </label>
+                <input type="text" id="nc_query" name="nc_query" class="form-control form-control-sm" placeholder="Buscar termo de não conformidade..." value="{{ nc_query }}">
+            </div>
+            <div class="col-md-9 col-sm-12 text-md-end text-start mt-2">
+                <button type="submit" class="btn btn-sm btn-primary-custom px-3">
                     <i class="bi bi-funnel me-1"></i> Filtrar
                 </button>
-            </div>
-            <div class="col-auto">
-                <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary" title="Limpar filtro (voltar para mês atual)">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpar
+                <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary px-3 ms-2" title="Limpar todos os filtros">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Limpar Filtros
                 </a>
             </div>
         </form>

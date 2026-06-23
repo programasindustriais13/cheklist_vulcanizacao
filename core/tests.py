@@ -480,3 +480,143 @@ class ChecklistSystemTests(TestCase):
         machine_choices = [c[0] for c in form.fields['machine'].choices]
         self.assertIn(self.machine.id, machine_choices)
 
+    def test_general_observations_saved_and_exported(self):
+        self.client.login(username='test_inspector', password='testpassword123')
+        session = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            status='IN_PROGRESS',
+            started_at=timezone.now()
+        )
+        item = ChecklistItemValue.objects.create(
+            session=session,
+            section='ELETRICA',
+            item_name='Test item 1',
+            status=None
+        )
+
+        # 1. Save general observations on pause
+        response = self.client.post(
+            reverse('checklist_execute', kwargs={'session_id': session.id}),
+            {
+                'action': 'pause',
+                'pause_reason': 'Pausa teste',
+                'general_observations': 'Máquina com vazamento de óleo leve',
+                f'status_{item.id}': 'C',
+                f'observations_{item.id}': ''
+            }
+        )
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'PAUSED')
+        self.assertEqual(session.general_observations, 'Máquina com vazamento de óleo leve')
+
+        # 2. Resume session
+        self.client.post(
+            reverse('checklist_execute', kwargs={'session_id': session.id}),
+            {'action': 'continue'}
+        )
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'IN_PROGRESS')
+
+        # 3. Save general observations on finalize
+        response = self.client.post(
+            reverse('checklist_execute', kwargs={'session_id': session.id}),
+            {
+                'action': 'finalize',
+                'general_observations': 'Máquina revisada, tudo ok ao final',
+                f'status_{item.id}': 'C',
+                f'observations_{item.id}': ''
+            }
+        )
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'AGUARDANDO_LIDER')
+        self.assertEqual(session.general_observations, 'Máquina revisada, tudo ok ao final')
+
+        # 4. Check display in template context
+        response = self.client.get(reverse('checklist_execute', kwargs={'session_id': session.id}))
+        self.assertContains(response, 'Máquina revisada, tudo ok ao final')
+
+        # 5. Check Excel Export contains it
+        self.client.login(username='test_analyst', password='testpassword123')
+        response_excel = self.client.get(reverse('export_checklist_excel', kwargs={'session_id': session.id}))
+        self.assertEqual(response_excel.status_code, 200)
+        self.assertEqual(response_excel['content-type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    def test_dashboard_advanced_filters_and_excel_export(self):
+        # Create second inspector and machine
+        inspector2 = User.objects.create_user(
+            username='inspector_2',
+            password='testpassword123',
+            specialty='Mecânico',
+            is_active=True
+        )
+        machine2 = Machine.objects.create(name='Test Machine 102')
+
+        # Create session 1 (Test Machine 101, test_inspector, test_leader, status APROVADO, contains NC item)
+        session1 = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            status='APROVADO',
+            created_at=timezone.now()
+        )
+        ChecklistItemValue.objects.create(
+            session=session1,
+            section='ELETRICA',
+            item_name='Cabo rompido',
+            status='NC',
+            observations='Rompido'
+        )
+
+        # Create session 2 (Test Machine 102, inspector_2, test_leader, status IN_PROGRESS, no NCs)
+        session2 = ChecklistSession.objects.create(
+            machine=machine2,
+            leader=self.leader,
+            inspector=inspector2,
+            status='IN_PROGRESS',
+            created_at=timezone.now()
+        )
+        ChecklistItemValue.objects.create(
+            session=session2,
+            section='HIDRAULICA',
+            item_name='Mangueira solta',
+            status='C'
+        )
+
+        # Login as Analyst (to see all sessions)
+        self.client.login(username='test_analyst', password='testpassword123')
+
+        # Filter by Machine 101
+        response = self.client.get(reverse('dashboard') + f'?maquina={self.machine.id}')
+        self.assertIn(session1, response.context['sessions'])
+        self.assertNotIn(session2, response.context['sessions'])
+
+        # Filter by Machine 102
+        response = self.client.get(reverse('dashboard') + f'?maquina={machine2.id}')
+        self.assertIn(session2, response.context['sessions'])
+        self.assertNotIn(session1, response.context['sessions'])
+
+        # Filter by Inspector 2
+        response = self.client.get(reverse('dashboard') + f'?inspector={inspector2.id}')
+        self.assertIn(session2, response.context['sessions'])
+        self.assertNotIn(session1, response.context['sessions'])
+
+        # Filter by Status APROVADO
+        response = self.client.get(reverse('dashboard') + '?status_filter=APROVADO')
+        self.assertIn(session1, response.context['sessions'])
+        self.assertNotIn(session2, response.context['sessions'])
+
+        # Filter by NC Resumo: "Cabo"
+        response = self.client.get(reverse('dashboard') + '?nc_query=Cabo')
+        self.assertIn(session1, response.context['sessions'])
+        self.assertNotIn(session2, response.context['sessions'])
+
+        # Filter by NC Resumo: "Mangueira" (session2 has "Mangueira" but it is Conforme 'C', so it should not match)
+        response = self.client.get(reverse('dashboard') + '?nc_query=Mangueira')
+        self.assertEqual(len(response.context['sessions']), 0)
+
+        # Check export consolidado respects filters
+        response_excel = self.client.get(reverse('export_dashboard_excel') + f'?maquina={self.machine.id}')
+        self.assertEqual(response_excel.status_code, 200)
+
