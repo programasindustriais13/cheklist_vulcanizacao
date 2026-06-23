@@ -10,6 +10,7 @@ from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 from django.contrib import messages
 from django.db import transaction
+from django.db.models import Q
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -164,15 +165,16 @@ def dashboard(request):
 
     # --- QUERYSET DE SESSÕES (filtrada por período) ---
     if user.is_technician:
-        # Technicians only see checklists they inspected
+        # Technicians only see checklists they inspected or co-inspected
         sessions = ChecklistSession.objects.filter(
-            inspector=user, created_at__gte=dt_inicio, created_at__lte=dt_fim
-        ).select_related('machine', 'inspector', 'leader').order_by('-created_at')
+            Q(inspector=user) | Q(co_inspector=user),
+            created_at__gte=dt_inicio, created_at__lte=dt_fim
+        ).select_related('machine', 'inspector', 'co_inspector', 'leader').order_by('-created_at')
     else:
         # Leaders, Analysts, and Directors see all checklists
         sessions = ChecklistSession.objects.filter(
             created_at__gte=dt_inicio, created_at__lte=dt_fim
-        ).select_related('machine', 'inspector', 'leader').order_by('-created_at')
+        ).select_related('machine', 'inspector', 'co_inspector', 'leader').order_by('-created_at')
 
     # Aplicar filtros adicionais combinados
     if maquina_id:
@@ -207,7 +209,7 @@ def dashboard(request):
     # Get pending checklists for Lider approval
     pending_leader = []
     if user.is_leader or user.is_superuser:
-        pending_leader = ChecklistSession.objects.filter(status='AGUARDANDO_LIDER').select_related('machine', 'inspector').order_by('-created_at')
+        pending_leader = ChecklistSession.objects.filter(status='AGUARDANDO_LIDER').select_related('machine', 'inspector', 'co_inspector').order_by('-created_at')
         for s in pending_leader:
             nc_items = s.items.filter(status='NC')
             s.nc_list = [item.item_name for item in nc_items]
@@ -216,7 +218,7 @@ def dashboard(request):
     # Get checklists rejected by Leader for Analyst review
     pending_analyst = []
     if user.is_analyst or user.is_director or user.is_superuser:
-        pending_analyst = ChecklistSession.objects.filter(status='REPROVADO_LIDER').select_related('machine', 'inspector').order_by('-created_at')
+        pending_analyst = ChecklistSession.objects.filter(status='REPROVADO_LIDER').select_related('machine', 'inspector', 'co_inspector').order_by('-created_at')
         for s in pending_analyst:
             nc_items = s.items.filter(status='NC')
             s.nc_list = [item.item_name for item in nc_items]
@@ -225,7 +227,10 @@ def dashboard(request):
     # Get checklists rejected by Analyst for Technician corrections
     pending_corrections = []
     if user.is_technician:
-        pending_corrections = ChecklistSession.objects.filter(status='REPROVAR_FINAL_REFAZER', inspector=user).select_related('machine', 'inspector').order_by('-created_at')
+        pending_corrections = ChecklistSession.objects.filter(
+            Q(inspector=user) | Q(co_inspector=user),
+            status='REPROVAR_FINAL_REFAZER'
+        ).select_related('machine', 'inspector', 'co_inspector').order_by('-created_at')
         for s in pending_corrections:
             nc_items = s.items.filter(status='NC')
             s.nc_list = [item.item_name for item in nc_items]
@@ -454,6 +459,8 @@ def checklist_start(request):
             with transaction.atomic():
                 session = form.save(commit=False)
                 session.inspector = request.user
+                if hasattr(request.user, 'partner_user') and request.user.partner_user:
+                    session.co_inspector = request.user.partner_user
                 session.status = 'IN_PROGRESS'
                 session.started_at = timezone.now()
                 session.save()
@@ -505,7 +512,7 @@ def checklist_execute(request, session_id):
     # Check authorization to edit
     is_editable = session.status in ['IN_PROGRESS', 'PAUSED']
     if is_editable:
-        if request.user != session.inspector and not (request.user.is_director or request.user.is_analyst or request.user.is_superuser):
+        if request.user != session.inspector and request.user != session.co_inspector and not (request.user.is_director or request.user.is_analyst or request.user.is_superuser):
             return HttpResponseForbidden("Você não tem permissão para editar o checklist de outro inspetor.")
 
     # Handle state transitions and execution POST actions
@@ -716,8 +723,8 @@ def analyst_decision(request, session_id):
 def checklist_reopen(request, session_id):
     session = get_object_or_404(ChecklistSession, id=session_id)
     
-    # Only the original inspector or superuser/director/analyst can reopen
-    if request.user != session.inspector and not (request.user.is_director or request.user.is_analyst or request.user.is_superuser):
+    # Only the original inspector, co-inspector, or superuser/director/analyst can reopen
+    if request.user != session.inspector and request.user != session.co_inspector and not (request.user.is_director or request.user.is_analyst or request.user.is_superuser):
         return HttpResponseForbidden("Você não tem permissão para reabrir este checklist.")
         
     if session.status != 'REPROVAR_FINAL_REFAZER':
@@ -809,9 +816,13 @@ def export_checklist_excel(request, session_id):
         return dt.astimezone().strftime("%d/%m/%Y %H:%M:%S") if dt else "-"
 
     # Metadata rows
+    inspector_display = f"{session.inspector.username} ({session.inspector.specialty})"
+    if session.co_inspector:
+        inspector_display += f" & {session.co_inspector.username} ({session.co_inspector.specialty})"
+
     metadata = [
         ("ID da Sessão:", session.id, "Máquina:", session.machine.name),
-        ("Inspetor:", f"{session.inspector.username} ({session.inspector.specialty})", "Nome do Líder:", session.leader.get_full_name() or session.leader.username if session.leader else "-"),
+        ("Inspetor(es):", inspector_display, "Nome do Líder:", session.leader.get_full_name() or session.leader.username if session.leader else "-"),
         ("Status Atual:", session.get_status_display(), "Criado em:", format_dt(session.created_at)),
         ("Iniciado em:", format_dt(session.started_at), "Finalizado em:", format_dt(session.completed_at))
     ]
@@ -968,7 +979,7 @@ def export_dashboard_excel(request):
 
     sessions = ChecklistSession.objects.filter(
         created_at__gte=dt_inicio, created_at__lte=dt_fim
-    ).select_related('machine', 'inspector').order_by('-created_at')
+    ).select_related('machine', 'inspector', 'co_inspector').order_by('-created_at')
 
     if maquina_id:
         sessions = sessions.filter(machine_id=maquina_id)
@@ -1004,7 +1015,7 @@ def export_dashboard_excel(request):
     ws.row_dimensions[1].height = 45
     
     # Header columns
-    headers = ["ID", "Data Criação", "Máquina", "Inspetor", "Líder", "Status", "Não Conformidades", "Histórico de Pausas", "Observações Gerais"]
+    headers = ["ID", "Data Criação", "Máquina", "Inspetor", "Co-Inspetor", "Líder", "Status", "Não Conformidades", "Histórico de Pausas", "Observações Gerais"]
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col_idx, value=h)
         cell.font = header_font
@@ -1031,13 +1042,14 @@ def export_dashboard_excel(request):
         ws.cell(row=current_row, column=2, value=s.created_at.astimezone().strftime("%d/%m/%Y %H:%M")).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=3, value=s.machine.name)
         ws.cell(row=current_row, column=4, value=f"{s.inspector.username} ({s.inspector.specialty})")
-        ws.cell(row=current_row, column=5, value=s.leader.get_full_name() or s.leader.username if s.leader else "-")
-        ws.cell(row=current_row, column=6, value=s.get_status_display()).alignment = Alignment(horizontal='center')
-        ws.cell(row=current_row, column=7, value=nc_summary)
-        ws.cell(row=current_row, column=8, value=pause_history_str)
-        ws.cell(row=current_row, column=9, value=s.general_observations or "")
+        ws.cell(row=current_row, column=5, value=f"{s.co_inspector.username} ({s.co_inspector.specialty})" if s.co_inspector else "-")
+        ws.cell(row=current_row, column=6, value=s.leader.get_full_name() or s.leader.username if s.leader else "-")
+        ws.cell(row=current_row, column=7, value=s.get_status_display()).alignment = Alignment(horizontal='center')
+        ws.cell(row=current_row, column=8, value=nc_summary)
+        ws.cell(row=current_row, column=9, value=pause_history_str)
+        ws.cell(row=current_row, column=10, value=s.general_observations or "")
         
-        for col in range(1, 10):
+        for col in range(1, 11):
             cell = ws.cell(row=current_row, column=col)
             cell.font = cell_font
             cell.border = thin_border
@@ -1050,11 +1062,12 @@ def export_dashboard_excel(request):
     ws.column_dimensions['B'].width = 20
     ws.column_dimensions['C'].width = 30
     ws.column_dimensions['D'].width = 30
-    ws.column_dimensions['E'].width = 22
-    ws.column_dimensions['F'].width = 18
-    ws.column_dimensions['G'].width = 60
-    ws.column_dimensions['H'].width = 50
-    ws.column_dimensions['I'].width = 40
+    ws.column_dimensions['E'].width = 30
+    ws.column_dimensions['F'].width = 22
+    ws.column_dimensions['G'].width = 18
+    ws.column_dimensions['H'].width = 60
+    ws.column_dimensions['I'].width = 50
+    ws.column_dimensions['J'].width = 40
     
     output = io.BytesIO()
     wb.save(output)

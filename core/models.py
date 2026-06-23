@@ -11,6 +11,14 @@ class User(AbstractUser):
         ('Lider', 'Lider'),
     ]
     specialty = models.CharField(max_length=50, choices=SPECIALTY_CHOICES, verbose_name='Especialidade')
+    partner_user = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='partner_of',
+        verbose_name='Parceiro de Turno'
+    )
 
     @property
     def is_technician(self):
@@ -36,6 +44,21 @@ class User(AbstractUser):
     def can_create_checklist(self):
         return self.specialty != 'Lider' or self.is_superuser
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.partner_user:
+            partner = self.partner_user
+            if partner.partner_user != self:
+                partner.partner_user = self
+                super(User, partner).save(update_fields=['partner_user'])
+        
+        other_partners = User.objects.filter(partner_user=self)
+        if self.partner_user:
+            other_partners = other_partners.exclude(id=self.partner_user.id)
+        for other in other_partners:
+            other.partner_user = None
+            super(User, other).save(update_fields=['partner_user'])
+
     def __str__(self):
         return f"{self.username} ({self.specialty})"
 
@@ -60,6 +83,14 @@ class ChecklistSession(models.Model):
     machine = models.ForeignKey(Machine, on_delete=models.CASCADE, related_name='sessions', verbose_name='Máquina')
     leader = models.ForeignKey(User, on_delete=models.PROTECT, related_name='led_sessions', verbose_name='Líder de Turno', null=True)
     inspector = models.ForeignKey(User, on_delete=models.PROTECT, related_name='inspections', verbose_name='Inspetor')
+    co_inspector = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='co_inspections',
+        verbose_name='Co-Inspetor'
+    )
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='NOT_STARTED', verbose_name='Status')
     general_observations = models.TextField(null=True, blank=True, verbose_name='Observações Gerais (Estado da Máquina)')
     

@@ -113,8 +113,10 @@
                     </div>
                     
                     <div class="col-md-6 col-lg-3">
-                        <label class="form-label fw-semibold text-secondary small">INSPETOR (USUÁRIO)</label>
-                        <input type="text" class="form-control bg-light fw-medium" value="{{ session.inspector.username }} ({{ session.inspector.specialty }})" readonly>
+                        <label class="form-label fw-semibold text-secondary small">
+                            {% if session.co_inspector %}INSPETORES{% else %}INSPETOR (USUÁRIO){% endif %}
+                        </label>
+                        <input type="text" class="form-control bg-light fw-medium" value="{% if session.co_inspector %}{{ session.inspector.username }} ({{ session.inspector.specialty }}) &amp; {{ session.co_inspector.username }} ({{ session.co_inspector.specialty }}){% else %}{{ session.inspector.username }} ({{ session.inspector.specialty }}){% endif %}" readonly>
                     </div>
                     
                     <div class="col-md-6 col-lg-3">

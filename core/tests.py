@@ -655,4 +655,213 @@ class ChecklistSystemTests(TestCase):
         self.assertIsNotNone(log)
         self.assertEqual(log.pause_reason, "Pausa automática: Fim do tempo de sessão logada (2h)")
 
+    def test_technician_pair_symmetry(self):
+        # 1. Create two technicians
+        tech_a = User.objects.create_user(
+            username='tech_a',
+            password='testpassword123',
+            specialty='Mecânico',
+            is_active=True
+        )
+        tech_b = User.objects.create_user(
+            username='tech_b',
+            password='testpassword123',
+            specialty='Eletricista',
+            is_active=True
+        )
+        
+        # Set tech_b as tech_a's partner
+        tech_a.partner_user = tech_b
+        tech_a.save()
+        
+        # Verify symmetry
+        tech_b.refresh_from_db()
+        self.assertEqual(tech_b.partner_user, tech_a)
+        
+        # Clear tech_a's partner
+        tech_a.partner_user = None
+        tech_a.save()
+        
+        # Verify symmetry cleared
+        tech_b.refresh_from_db()
+        self.assertIsNone(tech_b.partner_user)
+
+    def test_checklist_creation_with_partner(self):
+        # Create partner technician
+        tech_b = User.objects.create_user(
+            username='tech_b',
+            password='testpassword123',
+            specialty='Eletricista',
+            is_active=True
+        )
+        self.inspector.partner_user = tech_b
+        self.inspector.save()
+        
+        self.client.login(username='test_inspector', password='testpassword123')
+        
+        response = self.client.post(reverse('checklist_start'), {
+            'machine': self.machine.id,
+            'leader': self.leader.id
+        })
+        
+        session = ChecklistSession.objects.filter(machine=self.machine, leader=self.leader).first()
+        self.assertIsNotNone(session)
+        self.assertEqual(session.inspector, self.inspector)
+        self.assertEqual(session.co_inspector, tech_b)
+
+    def test_technician_restricted_visibility(self):
+        # Setup technicians and pairing
+        tech_a = self.inspector  # test_inspector (Eletricista)
+        tech_b = User.objects.create_user(
+            username='tech_b',
+            password='testpassword123',
+            specialty='Mecânico',
+            is_active=True
+        )
+        tech_a.partner_user = tech_b
+        tech_a.save()
+        
+        tech_c = User.objects.create_user(
+            username='tech_c',
+            password='testpassword123',
+            specialty='Eletromecânico',
+            is_active=True
+        )
+        
+        # Create checklist session for tech_a (tech_b is co_inspector)
+        session_ab = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=tech_a,
+            co_inspector=tech_b,
+            status='IN_PROGRESS',
+            started_at=timezone.now()
+        )
+        
+        # Create checklist session for tech_c (no co_inspector)
+        session_c = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=tech_c,
+            status='IN_PROGRESS',
+            started_at=timezone.now()
+        )
+        
+        # Test tech_a visibility (sees session_ab, not session_c)
+        self.client.login(username='test_inspector', password='testpassword123')
+        response = self.client.get(reverse('dashboard'))
+        self.assertIn(session_ab, response.context['sessions'])
+        self.assertNotIn(session_c, response.context['sessions'])
+        
+        # Test tech_b visibility (sees session_ab, not session_c)
+        self.client.login(username='tech_b', password='testpassword123')
+        response = self.client.get(reverse('dashboard'))
+        self.assertIn(session_ab, response.context['sessions'])
+        self.assertNotIn(session_c, response.context['sessions'])
+        
+        # Test tech_c visibility (sees session_c, not session_ab)
+        self.client.login(username='tech_c', password='testpassword123')
+        response = self.client.get(reverse('dashboard'))
+        self.assertIn(session_c, response.context['sessions'])
+        self.assertNotIn(session_ab, response.context['sessions'])
+        
+        # Test analyst visibility (sees both)
+        self.client.login(username='test_analyst', password='testpassword123')
+        response = self.client.get(reverse('dashboard'))
+        self.assertIn(session_ab, response.context['sessions'])
+        self.assertIn(session_c, response.context['sessions'])
+
+    def test_technician_edit_permissions(self):
+        tech_b = User.objects.create_user(
+            username='tech_b',
+            password='testpassword123',
+            specialty='Mecânico',
+            is_active=True
+        )
+        self.inspector.partner_user = tech_b
+        self.inspector.save()
+        
+        session = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            co_inspector=tech_b,
+            status='IN_PROGRESS',
+            started_at=timezone.now()
+        )
+        item = ChecklistItemValue.objects.create(
+            session=session,
+            section='ELETRICA',
+            item_name='Test item',
+            status=None
+        )
+        
+        # Unrelated tech_c
+        tech_c = User.objects.create_user(
+            username='tech_c',
+            password='testpassword123',
+            specialty='Eletromecânico',
+            is_active=True
+        )
+        
+        # 1. Tech_c tries to edit -> 403 Forbidden
+        self.client.login(username='tech_c', password='testpassword123')
+        response = self.client.post(
+            reverse('checklist_execute', kwargs={'session_id': session.id}),
+            {
+                'action': 'pause',
+                'pause_reason': 'Sem permissao',
+                f'status_{item.id}': 'C'
+            }
+        )
+        self.assertEqual(response.status_code, 403)
+        
+        # 2. Co-inspector tech_b tries to edit -> Should succeed (redirect to execute page)
+        self.client.login(username='tech_b', password='testpassword123')
+        response = self.client.post(
+            reverse('checklist_execute', kwargs={'session_id': session.id}),
+            {
+                'action': 'pause',
+                'pause_reason': 'Pausa dupla',
+                f'status_{item.id}': 'C'
+            }
+        )
+        self.assertEqual(response.status_code, 302)
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'PAUSED')
+
+    def test_excel_exports_with_co_inspector(self):
+        tech_b = User.objects.create_user(
+            username='tech_b',
+            password='testpassword123',
+            specialty='Mecânico',
+            is_active=True
+        )
+        session = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            co_inspector=tech_b,
+            status='APROVADO',
+            started_at=timezone.now(),
+            completed_at=timezone.now()
+        )
+        ChecklistItemValue.objects.create(
+            session=session,
+            section='ELETRICA',
+            item_name='Test item',
+            status='C'
+        )
+        
+        # Login as analyst to export
+        self.client.login(username='test_analyst', password='testpassword123')
+        
+        # Individual export
+        response_ind = self.client.get(reverse('export_checklist_excel', kwargs={'session_id': session.id}))
+        self.assertEqual(response_ind.status_code, 200)
+        
+        # Consolidated export
+        response_cons = self.client.get(reverse('export_dashboard_excel'))
+        self.assertEqual(response_cons.status_code, 200)
+
 

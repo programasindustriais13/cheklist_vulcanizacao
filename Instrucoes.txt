@@ -239,3 +239,49 @@ Resumo das alterações:
 5. TESTES E VALIDAÇÃO:
    - Adicionado teste automatizado `test_timeout_pause_checklist` para validar o comportamento da view de pausa e a geração da justificativa de 2h na timeline.
    - Testes automatizados: 16/16 OK.
+
+
+================================================================================
+ALTERAÇÃO: Visibilidade Restrita de Checklists e Sistema de Duplas de Turno
+Data: 2026-06-23
+================================================================================
+
+Arquivos alterados/criados:
+- core/models.py
+- core/views.py
+- core/admin.py
+- core/templates/core/dashboard.html
+- core/templates/core/checklist_form.html
+- core/tests.py
+- core/migrations/0006_checklistsession_co_inspector_user_partner_user.py [NEW]
+
+Resumo das alterações:
+
+1. BANCO DE DADOS (MODELS & MIGRATIONS):
+   - Adicionado o campo `partner_user` (ForeignKey para self, SET_NULL, null=True, blank=True) na classe `User` em `core/models.py`.
+   - Adicionado o campo `co_inspector` (ForeignKey para User, SET_NULL, null=True, blank=True) na classe `ChecklistSession` em `core/models.py`.
+   - Implementado método `save()` customizado em `User` para garantir que o relacionamento de dupla seja simétrico (se A aponta para B, B aponta para A) e se auto-limpe se desfeito.
+   - Gerada e aplicada migration incremental (`0006_checklistsession_co_inspector_user_partner_user.py`).
+
+2. DJANGO ADMIN (ADMIN):
+   - Atualizado `CustomUserAdmin` para expor o campo `partner_user`.
+   - Sobrescrito o método `get_form` para que a listagem de escolhas de `partner_user` mostre apenas técnicos ativos (Eletricista, Mecânico, Eletromecânico) e exclua o usuário atual sob edição.
+   - Atualizado `ChecklistSessionAdmin` para exibir a coluna `co_inspector` nas listagens e filtros.
+
+3. LOGICA DE NEGOCIO E VISIBILIDADE (VIEWS):
+   - `dashboard`: Interceptada a QuerySet principal para usuários operacionais (técnicos), aplicando o filtro rigoroso `Q(inspector=user) | Q(co_inspector=user)` para garantir que eles visualizem apenas os próprios checklists e os de sua dupla. A fila de correções pendentes (`pending_corrections`) foi ajustada de forma idêntica.
+   - `checklist_start`: Ao iniciar uma sessão, se o inspetor atual possuir um `partner_user` ativo configurado no Admin, ele é atribuído automaticamente ao campo `co_inspector` da sessão.
+   - `checklist_execute` & `checklist_reopen`: Ajustadas as verificações de permissão para permitir que tanto o inspetor quanto o co-inspetor (dupla) possam executar, editar e reabrir o checklist de turno.
+
+4. EXPORTAÇÃO EXCEL ATUALIZADA (VIEWS):
+   - `export_checklist_excel`: Atualizada para concatenar os nomes e especialidades de ambos os inspetores no campo "Inspetor(es)" se houver co-inspetor cadastrado.
+   - `export_dashboard_excel`: Inserida uma nova coluna "Co-Inspetor" logo ao lado de "Inspetor" no relatório consolidado, listando nome e especialidade do parceiro de turno.
+
+5. INTERFACE (HTML TEMPLATES):
+   - `checklist_form.html`: Modificado o cabeçalho de execução para exibir "INSPETORES" com nomes e especialidades de ambos no formato `"João (Mecânico) & Paulo (Eletricista)"` caso haja co-inspetor cadastrado.
+   - `dashboard.html`: Modificadas todas as tabelas (histórico principal, pendências de Líder e Analista) para concatenar ou renderizar os dados do inspetor e co-inspetor conjuntamente.
+
+6. TESTES E VALIDAÇÃO:
+   - Adicionados testes automatizados cobrindo o relacionamento simétrico no banco, preenchimento automático do co-inspetor, isolamento de visualização de QuerySet de acordo com o perfil/dupla, permissão de edição para co-inspetores (e proibição para terceiros) e exportações de Excel.
+   - Testes automatizados: 21/21 OK.
+
