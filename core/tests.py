@@ -620,3 +620,39 @@ class ChecklistSystemTests(TestCase):
         response_excel = self.client.get(reverse('export_dashboard_excel') + f'?maquina={self.machine.id}')
         self.assertEqual(response_excel.status_code, 200)
 
+    def test_timeout_pause_checklist(self):
+        # Login as inspector
+        self.client.login(username='test_inspector', password='testpassword123')
+        
+        # Create an active checklist session in progress
+        session = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            status='IN_PROGRESS',
+            started_at=timezone.now()
+        )
+        
+        # Call the timeout_pause_checklist AJAX endpoint
+        response = self.client.post(
+            reverse('timeout_pause_checklist'),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+        )
+        
+        # Check that the response is successful JSON
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'ok')
+        self.assertIn('pausado automaticamente', data['message'])
+        
+        # Verify the session status changed to PAUSED
+        session.refresh_from_db()
+        self.assertEqual(session.status, 'PAUSED')
+        self.assertIsNotNone(session.paused_at)
+        
+        # Verify the timeline log contains the correct absolute timeout justification
+        log = ChecklistTimelineLog.objects.filter(session=session, action='PAUSE').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.pause_reason, "Pausa automática: Fim do tempo de sessão logada (2h)")
+
+

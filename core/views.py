@@ -1099,7 +1099,7 @@ def timeout_pause_checklist(request):
         # Nenhum checklist em andamento — logout pode prosseguir normalmente
         return JsonResponse({'status': 'ok', 'message': 'Nenhum checklist ativo. Logout liberado.'})
 
-    MOTIVO_TIMEOUT = "Pausa automática: Timeout por inatividade"
+    MOTIVO_TIMEOUT = "Pausa automática: Fim do tempo de sessão logada (2h)"
 
     try:
         with transaction.atomic():

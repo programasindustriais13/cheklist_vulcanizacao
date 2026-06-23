@@ -226,39 +226,15 @@
     {% block extra_js %}{% endblock %}
 
     {% if user.is_authenticated %}
-    <!-- ================================================================
-         TIMEOUT POR INATIVIDADE - django-session-security
-         Inclui os scripts/templates padrão da biblioteca (ping AJAX,
-         detecção de atividade via mouse/teclado/toque em tablet).
-    ================================================================= -->
-    {% include 'session_security/all.html' %}
-
-    <!-- Modal de Aviso de Timeout customizado para Tablet -->
-    <div class="modal fade" id="sessionTimeoutModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="sessionTimeoutModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <i class="bi bi-clock-history me-2 fs-4"></i>
-                    <h5 class="modal-title" id="sessionTimeoutModalLabel">Sessão expirando por inatividade</h5>
-                </div>
-                <div class="modal-body text-center">
-                    <p class="mb-1 text-muted" style="font-size:0.95rem;">Você ainda está aí?</p>
-                    <div id="timeout-countdown">60</div>
-                    <p class="mt-1 mb-0" style="font-size:0.9rem; color:#7f8c8d;">segundos restantes</p>
-                    <div class="timeout-info-box mt-3 text-start">
-                        <i class="bi bi-shield-exclamation me-1"></i>
-                        <strong>Atenção:</strong> Se você estiver preenchendo um checklist,
-                        ele será <strong>salvo e pausado automaticamente</strong> antes do logout.
-                        Você poderá continuar depois.
-                    </div>
-                </div>
-                <div class="modal-footer d-flex">
-                    <button type="button" id="btn-timeout-sair" class="btn btn-timeout btn-sair">
-                        <i class="bi bi-box-arrow-right"></i> Sair Agora
-                    </button>
-                    <button type="button" id="btn-timeout-continuar" class="btn btn-timeout btn-continuar">
-                        <i class="bi bi-check-circle-fill"></i> Continuar Logado
-                    </button>
+    <!-- Floating Session Timeout Warning Badge (Bottom-Right Corner) -->
+    <div id="session-timeout-banner" class="position-fixed bottom-0 end-0 m-4 p-3 bg-warning text-dark border border-warning-subtle rounded-4 shadow-lg d-none animate-fade-in" style="z-index: 9999; max-width: 320px;">
+        <div class="d-flex align-items-start">
+            <i class="bi bi-clock-history me-3 fs-3 text-danger"></i>
+            <div>
+                <h6 class="fw-bold mb-1">Sessão Expirando</h6>
+                <p class="mb-2" style="font-size: 0.9rem;">Sua sessão de login expira em <strong id="session-time-left">05:00</strong>. Finalize ou salve seu checklist.</p>
+                <div class="d-flex gap-2">
+                    <button type="button" id="btn-timeout-banner-close" class="btn btn-sm btn-outline-dark rounded-3 px-3 py-1">Fechar aviso</button>
                 </div>
             </div>
         </div>
@@ -266,53 +242,33 @@
 
     <script>
     // ================================================================
-    // TIMEOUT POR INATIVIDADE — Lógica de Integração
+    // DJANGO NATIVE SESSION - Expiração Absoluta por Tempo Logado
     // ================================================================
     (function () {
         'use strict';
 
-        // URL do endpoint de pausa por timeout (gerado pelo Django)
         const PAUSE_URL = '{% url "timeout_pause_checklist" %}';
-        // CSRF token para requisições POST
         const CSRF_TOKEN = '{{ csrf_token }}';
-        // Contagem regressiva: diferença entre EXPIRE_AFTER e WARN_AFTER (300 - 240 = 60s)
-        const WARN_SECONDS = 60;
 
-        let countdownTimer = null;
-        let secondsLeft = WARN_SECONDS;
-        let modalInstance = null;
+        // Obter os segundos restantes retornados pelo backend
+        let secondsLeft = parseInt("{{ request.session.get_expiry_age|default:7200 }}", 10);
+        if (isNaN(secondsLeft) || secondsLeft <= 0) return;
+
+        // Calcular timestamp de expiração absoluta para evitar drift do clock do navegador
+        const expirationTime = Date.now() + (secondsLeft * 1000);
+
+        const bannerEl = document.getElementById('session-timeout-banner');
+        const timeLeftEl = document.getElementById('session-time-left');
+        const btnClose = document.getElementById('btn-timeout-banner-close');
+
         let isLoggingOut = false;
+        let bannerDismissed = false;
 
-        const modalEl = document.getElementById('sessionTimeoutModal');
-        const countdownEl = document.getElementById('timeout-countdown');
-        const btnContinuar = document.getElementById('btn-timeout-continuar');
-        const btnSair = document.getElementById('btn-timeout-sair');
-
-        if (!modalEl) return;
-
-        modalInstance = new bootstrap.Modal(modalEl, {
-            backdrop: 'static',
-            keyboard: false
-        });
-
-        // ---- Funções -----------------------------------------------
-
-        function startCountdown() {
-            secondsLeft = WARN_SECONDS;
-            countdownEl.textContent = secondsLeft;
-            clearInterval(countdownTimer);
-            countdownTimer = setInterval(function () {
-                secondsLeft -= 1;
-                countdownEl.textContent = secondsLeft;
-                if (secondsLeft <= 0) {
-                    clearInterval(countdownTimer);
-                    performLogout();
-                }
-            }, 1000);
-        }
-
-        function stopCountdown() {
-            clearInterval(countdownTimer);
+        if (btnClose) {
+            btnClose.addEventListener('click', function () {
+                bannerEl.classList.add('d-none');
+                bannerDismissed = true;
+            });
         }
 
         async function pauseActiveChecklist() {
@@ -336,9 +292,10 @@
         async function performLogout() {
             if (isLoggingOut) return;
             isLoggingOut = true;
-            stopCountdown();
-            // Pausa qualquer checklist IN_PROGRESS antes de sair
+            
+            // Pausa qualquer checklist IN_PROGRESS do usuário antes do logoff forçado
             await pauseActiveChecklist();
+            
             // Dispara o logout submetendo o formulário de logout do Django
             const logoutForm = document.querySelector('form[action*="logout"]');
             if (logoutForm) {
@@ -348,43 +305,32 @@
             }
         }
 
-        // ---- Integração com django-session-security ----------------
-        // A biblioteca emite eventos customizados no document:
-        // 'session_security_warn'    → exibir aviso (WARN_AFTER atingido)
-        // 'session_security_expired' → expirar sessão (EXPIRE_AFTER atingido)
+        function formatTime(sec) {
+            const minutes = Math.floor(sec / 60);
+            const seconds = sec % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
 
-        document.addEventListener('session_security_warn', function () {
-            if (!isLoggingOut) {
-                modalInstance.show();
-                startCountdown();
+        // Ticker de 1 segundo
+        const timer = setInterval(function () {
+            const now = Date.now();
+            secondsLeft = Math.max(0, Math.round((expirationTime - now) / 1000));
+
+            // Salvar e deslogar 10 segundos antes do limite absoluto da sessão
+            if (secondsLeft <= 10) {
+                clearInterval(timer);
+                performLogout();
+                return;
             }
-        });
 
-        document.addEventListener('session_security_expired', async function () {
-            stopCountdown();
-            await performLogout();
-        });
-
-        // ---- Botões do Modal ---------------------------------------
-
-        btnContinuar.addEventListener('click', function () {
-            stopCountdown();
-            isLoggingOut = false;
-            modalInstance.hide();
-            // Força um ping no servidor para resetar o timer de inatividade
-            if (window.sessionSecurity && typeof window.sessionSecurity.ping === 'function') {
-                window.sessionSecurity.ping();
-            } else {
-                // Fallback: simula atividade disparando um evento de teclado
-                document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+            // Exibir aviso nos 5 minutos finais (300 segundos)
+            if (secondsLeft <= 300) {
+                if (bannerEl && !bannerDismissed) {
+                    bannerEl.classList.remove('d-none');
+                    timeLeftEl.textContent = formatTime(secondsLeft);
+                }
             }
-        });
-
-        btnSair.addEventListener('click', function () {
-            stopCountdown();
-            performLogout();
-        });
-
+        }, 1000);
     }());
     </script>
     {% endif %}

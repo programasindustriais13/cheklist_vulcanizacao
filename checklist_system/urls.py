@@ -20,6 +20,4 @@ from django.urls import path, include
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("core.urls")),
-    # URLs da biblioteca de timeout por inatividade
-    path("session_security/", include("session_security.urls")),
 ]

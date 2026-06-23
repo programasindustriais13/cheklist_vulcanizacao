@@ -76,7 +76,7 @@ Resumo das alterações:
 1. CORREÇÃO DO CARD "APROVADOS" (BUG):
    - O card usava {% regroup %} no template para contar aprovados, o que podia
      exibir valor vazio ao invés de "0" quando não havia aprovados.
-   - Lógica movida para a view (backend): approved_count calculado via
+   - Lógica movida para a view (backend): approved_count calculated via
      sessions.filter(status='APROVADO').count()
    - Template agora exibe apenas {{ approved_count }}
 
@@ -89,7 +89,7 @@ Resumo das alterações:
 
 3. EXPORTAÇÃO EXCEL COM FILTRO:
    - Botão "Exportar Histórico (Excel)" passa data_inicio e data_fim na URL
-   - View export_dashboard_excel respeita o filtro de período
+   - View export_dashboard_excel respects the filter of period
    - Nome do arquivo inclui o período: Historico_Checklists_DD-MM-YYYY_a_DD-MM-YYYY.xlsx
 
 Nenhuma migration necessária (sem alteração de models).
@@ -130,7 +130,7 @@ Resumo das alterações:
    - Adicionado tratamento para gráficos sem dados no período selecionado (exibição de overlay informativo de estado vazio).
 
 4. TESTES E VALIDAÇÃO:
-   - Adicionados testes automatizados cobrindo RBAC de acesso (bloqueio de mecânicos/operadores, liberação de analistas), presença de gráficos no HTML e passagem do filtro de período.
+   - Adizados testes automatizados cobrindo RBAC de acesso (bloqueio de mecânicos/operadores, liberação de analistas), presença de gráficos no HTML e passagem do filtro de período.
    - Testes automatizados: 12/12 OK.
 
 
@@ -203,3 +203,39 @@ Resumo das alterações:
 6. TESTES E VALIDAÇÃO:
    - Adizados testes automatizados cobrindo a persistência do campo de observações gerais na pausa/finalização, exibição no HTML, exportações Excel e validação dos filtros combinados.
    - Testes automatizados: 15/15 OK.
+
+================================================================================
+ALTERAÇÃO: Expiração Absoluta de Sessão (2h) e Pausa Automática de Checklist
+Data: 2026-06-23
+================================================================================
+
+Arquivos alterados:
+- checklist_system/settings.py
+- checklist_system/urls.py
+- core/views.py
+- core/templates/core/base.html
+- core/tests.py
+
+Resumo das alterações:
+
+1. CONFIGURAÇÕES GLOBAIS DE SESSÃO (BACKEND):
+   - Desativado o pacote `django-session-security` removendo seu middleware e das `INSTALLED_APPS`.
+   - Configurada a expiração de sessão nativa do Django no `settings.py`:
+     * `SESSION_COOKIE_AGE = 7200` (Sessão dura exatamente 2 horas).
+     * `SESSION_SAVE_EVERY_REQUEST = False` (Evita renovar a expiração a cada clique, tornando-a absoluta).
+
+2. ROTAS E ENDPOINTS:
+   - Removido o redirecionamento/URL de `session_security/` do `urls.py` do projeto.
+
+3. LOG E AUDITORIA (VIEWS):
+   - Atualizada a justificativa automática registrada em `ChecklistTimelineLog` ao pausar via timeout para: `"Pausa automática: Fim do tempo de sessão logada (2h)"`.
+
+4. INTERFACE E SCRIPTS (FRONTEND):
+   - Removidos os scripts antigos e modais de inatividade baseados em mouse/toques em `base.html`.
+   - Implementado um banner de contagem regressiva flutuante e discreto (canto inferior direito) que aparece somente nos últimos 5 minutos de sessão.
+   - Implementada lógica JavaScript que rastreia os segundos restantes (`request.session.get_expiry_age`), calculando o término de forma imune a drifts/atrasos do clock do navegador.
+   - 10 segundos antes do limite absoluto da sessão terminar (para evitar erros de sessão já expirada no servidor), o script dispara automaticamente uma requisição AJAX `/timeout-pause/` e faz o logout forçado do usuário.
+
+5. TESTES E VALIDAÇÃO:
+   - Adicionado teste automatizado `test_timeout_pause_checklist` para validar o comportamento da view de pausa e a geração da justificativa de 2h na timeline.
+   - Testes automatizados: 16/16 OK.
