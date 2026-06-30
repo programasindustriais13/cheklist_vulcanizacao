@@ -37,4 +37,9 @@ urlpatterns = [
 
     # Timeout por Inatividade - Salvar e Pausar Checklist antes do Logout
     path('timeout-pause/', views.timeout_pause_checklist, name='timeout_pause_checklist'),
+
+    # Auditor routes
+    path('auditor/queue/', views.auditor_queue, name='auditor_queue'),
+    path('auditor/checklist/<int:session_id>/', views.checklist_audit, name='checklist_audit'),
+    path('auditor/history/', views.auditor_history, name='auditor_history'),
 ]

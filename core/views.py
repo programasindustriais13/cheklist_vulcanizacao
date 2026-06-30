@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from datetime import datetime, time as dt_time
 from functools import wraps
 from django.shortcuts import render, redirect, get_object_or_404
@@ -11,10 +12,12 @@ from django.utils import timezone
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Q
+from django.conf import settings
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.drawing.image import Image as OpenpyxlImage
 
 from .models import User, Machine, ChecklistSession, ChecklistTimelineLog, ChecklistItemValue
 from .forms import RegisterForm, MachineForm, ChecklistStartForm
@@ -80,6 +83,19 @@ def machine_management_required(view_func):
         if request.user.is_authenticated and (request.user.is_superuser or request.user.specialty in ['Diretor', 'Analista']):
             return view_func(request, *args, **kwargs)
         messages.error(request, "Você não tem permissão para acessar esta página.")
+        if request.user.is_authenticated and request.user.specialty == 'Auditor':
+            return redirect('auditor_queue')
+        return redirect('dashboard')
+    return _wrapped_view
+
+def auditor_or_management_required(view_func):
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if request.user.is_authenticated and (request.user.is_superuser or request.user.specialty in ['Auditor', 'Analista', 'Diretor']):
+            return view_func(request, *args, **kwargs)
+        messages.error(request, "Você não tem permissão para acessar esta página.")
+        if request.user.is_authenticated and request.user.specialty == 'Auditor':
+            return redirect('auditor_queue')
         return redirect('dashboard')
     return _wrapped_view
 
@@ -133,6 +149,8 @@ def machine_delete(request, pk):
 @login_required
 def dashboard(request):
     user = request.user
+    if user.specialty == 'Auditor':
+        return redirect('auditor_queue')
 
     # --- FILTRO POR PERÍODO (parâmetros GET) ---
     today = timezone.localdate()
@@ -444,6 +462,9 @@ def analytical_dashboard(request):
 
 @login_required
 def checklist_start(request):
+    if request.user.specialty == 'Auditor':
+        messages.error(request, "Auditores não possuem permissão para iniciar novos checklists.")
+        return redirect('auditor_queue')
     if not request.user.can_create_checklist:
         return HttpResponseForbidden("Líderes de turno não possuem permissão para iniciar novos checklists.")
 
@@ -786,30 +807,47 @@ def export_checklist_excel(request, session_id):
     ws.title = f"Checklist - ID {session.id}"
     
     # Formatting Fonts & Styles
-    title_font = Font(name='Segoe UI', size=16, bold=True, color='FFFFFF')
-    header_font = Font(name='Segoe UI', size=11, bold=True, color='FFFFFF')
+    title_font = Font(name='Segoe UI', size=16, bold=True, color='EAC532') # Yellow text
+    header_font = Font(name='Segoe UI', size=11, bold=True, color='000000') # Black text
     meta_label_font = Font(name='Segoe UI', size=10, bold=True, color='2c3e50')
     meta_value_font = Font(name='Segoe UI', size=10, color='333333')
     section_font = Font(name='Segoe UI', size=11, bold=True, color='2c3e50')
     item_font = Font(name='Segoe UI', size=10)
     
     # Fills
-    title_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid') # Slate Blue
-    header_fill = PatternFill(start_color='2F5597', end_color='2F5597', fill_type='solid') # Steel Blue
-    section_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid') # Soft blue tint
+    title_fill = PatternFill(start_color='000000', end_color='000000', fill_type='solid') # Black
+    header_fill = PatternFill(start_color='EAC532', end_color='EAC532', fill_type='solid') # Yellow
+    section_fill = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid') # Light grey
     conforme_fill = PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid') # Pastel Green
     nconforme_fill = PatternFill(start_color='FCE4D6', end_color='FCE4D6', fill_type='solid') # Pastel Rose
     
     thin_border_side = Side(border_style='thin', color='D9D9D9')
     thin_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
     
-    # Title Row
-    ws.merge_cells('A1:D1')
-    ws['A1'] = "RELATÓRIO DE CHECKLIST DE INÍCIO DE TURNO"
-    ws['A1'].font = title_font
+    # Title Row with Logo insertion
+    ws.row_dimensions[1].height = 60
+    logo_path = os.path.join(settings.MEDIA_ROOT, "Untitled-2.png")
+    if os.path.exists(logo_path):
+        try:
+            img = OpenpyxlImage(logo_path)
+            img.width = 85
+            img.height = 60
+            ws.add_image(img, 'A1')
+        except Exception:
+            pass
+            
+    # Fill background color of A1 to match the black title bar
     ws['A1'].fill = title_fill
-    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
-    ws.row_dimensions[1].height = 45
+    
+    ws.merge_cells('B1:F1')
+    ws['B1'] = "RELATÓRIO DE CHECKLIST DE INÍCIO DE TURNO"
+    ws['B1'].font = title_font
+    ws['B1'].fill = title_fill
+    ws['B1'].alignment = Alignment(horizontal='center', vertical='center')
+    
+    # Ensure background of merged title cells is filled
+    for col_char in ['C', 'D', 'E', 'F']:
+        ws[f'{col_char}1'].fill = title_fill
     
     # Helper to check timezone formatting safety
     def format_dt(dt):
@@ -824,7 +862,8 @@ def export_checklist_excel(request, session_id):
         ("ID da Sessão:", session.id, "Máquina:", session.machine.name),
         ("Inspetor(es):", inspector_display, "Nome do Líder:", session.leader.get_full_name() or session.leader.username if session.leader else "-"),
         ("Status Atual:", session.get_status_display(), "Criado em:", format_dt(session.created_at)),
-        ("Iniciado em:", format_dt(session.started_at), "Finalizado em:", format_dt(session.completed_at))
+        ("Iniciado em:", format_dt(session.started_at), "Finalizado em:", format_dt(session.completed_at)),
+        ("Status Auditoria:", session.get_audit_status_display(), "Auditor:", session.audited_by.username if session.audited_by else "-")
     ]
     
     current_row = 3
@@ -834,7 +873,7 @@ def export_checklist_excel(request, session_id):
         ws.cell(row=current_row, column=3, value=label2).font = meta_label_font
         ws.cell(row=current_row, column=4, value=val2).font = meta_value_font
         
-        for col in range(1, 5):
+        for col in range(1, 7):
             ws.cell(row=current_row, column=col).border = thin_border
             ws.cell(row=current_row, column=col).alignment = Alignment(vertical='center')
             
@@ -851,20 +890,20 @@ def export_checklist_excel(request, session_id):
     pause_history_str = " | ".join(pause_details) if pause_details else "Nenhuma pausa registrada"
 
     ws.cell(row=current_row, column=1, value="Histórico de Pausas:").font = meta_label_font
-    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
     ws.cell(row=current_row, column=2, value=pause_history_str).font = meta_value_font
     
-    for col in range(1, 5):
+    for col in range(1, 7):
         ws.cell(row=current_row, column=col).border = thin_border
         ws.cell(row=current_row, column=col).alignment = Alignment(vertical='center', wrap_text=True)
     ws.row_dimensions[current_row].height = None
     current_row += 1
 
     ws.cell(row=current_row, column=1, value="Obs. Gerais da Máquina:").font = meta_label_font
-    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=4)
+    ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=6)
     ws.cell(row=current_row, column=2, value=session.general_observations or "Nenhuma observação registrada").font = meta_value_font
     
-    for col in range(1, 5):
+    for col in range(1, 7):
         ws.cell(row=current_row, column=col).border = thin_border
         ws.cell(row=current_row, column=col).alignment = Alignment(vertical='center', wrap_text=True)
     ws.row_dimensions[current_row].height = None
@@ -872,12 +911,12 @@ def export_checklist_excel(request, session_id):
         
     current_row += 1 # Empty row
     # Section header columns
-    headers = ["Seção", "Item de Inspeção", "Status", "Observações"]
+    headers = ["Seção", "Item de Inspeção", "Status", "Observações", "Divergência (Auditor)", "Observação (Auditor)"]
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=current_row, column=col_idx, value=h)
         cell.font = header_font
         cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center' if col_idx == 3 else 'left', vertical='center')
+        cell.alignment = Alignment(horizontal='center' if col_idx in [3, 5] else 'left', vertical='center')
         cell.border = thin_border
     ws.row_dimensions[current_row].height = 25
     current_row += 1
@@ -921,6 +960,19 @@ def export_checklist_excel(request, session_id):
         c4.font = item_font
         c4.border = thin_border
         c4.alignment = Alignment(vertical='center')
+
+        # Auditor Divergent
+        divergent_text = "Sim" if item.auditor_is_divergent else "Não" if session.audit_status != 'NAO_AUDITADO' else "-"
+        c5 = ws.cell(row=current_row, column=5, value=divergent_text)
+        c5.font = item_font
+        c5.border = thin_border
+        c5.alignment = Alignment(horizontal='center', vertical='center')
+
+        # Auditor Observation
+        c6 = ws.cell(row=current_row, column=6, value=item.auditor_observation or "")
+        c6.font = item_font
+        c6.border = thin_border
+        c6.alignment = Alignment(vertical='center')
         
         ws.row_dimensions[current_row].height = 22
         current_row += 1
@@ -930,6 +982,8 @@ def export_checklist_excel(request, session_id):
     ws.column_dimensions['B'].width = 55
     ws.column_dimensions['C'].width = 20
     ws.column_dimensions['D'].width = 45
+    ws.column_dimensions['E'].width = 22
+    ws.column_dimensions['F'].width = 45
     
     # Save Workbook to buffer
     output = io.BytesIO()
@@ -996,31 +1050,52 @@ def export_dashboard_excel(request):
     ws = wb.active
     ws.title = "Histórico Checklists"
     
-    title_font = Font(name='Segoe UI', size=16, bold=True, color='FFFFFF')
-    header_font = Font(name='Segoe UI', size=11, bold=True, color='FFFFFF')
+    title_font = Font(name='Segoe UI', size=16, bold=True, color='EAC532') # Yellow text
+    header_font = Font(name='Segoe UI', size=11, bold=True, color='000000') # Black text
     cell_font = Font(name='Segoe UI', size=10)
     
-    title_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
-    header_fill = PatternFill(start_color='2F5597', end_color='2F5597', fill_type='solid')
+    title_fill = PatternFill(start_color='000000', end_color='000000', fill_type='solid') # Black
+    header_fill = PatternFill(start_color='EAC532', end_color='EAC532', fill_type='solid') # Yellow
     
     thin_border_side = Side(border_style='thin', color='D9D9D9')
     thin_border = Border(left=thin_border_side, right=thin_border_side, top=thin_border_side, bottom=thin_border_side)
     
-    # Title Row
-    ws.merge_cells('A1:I1')
-    ws['A1'] = "HISTÓRICO CONSOLIDADO DE CHECKLISTS"
-    ws['A1'].font = title_font
+    # Title Row with Logo insertion
+    ws.row_dimensions[1].height = 60
+    logo_path = os.path.join(settings.MEDIA_ROOT, "Untitled-2.png")
+    if os.path.exists(logo_path):
+        try:
+            img = OpenpyxlImage(logo_path)
+            img.width = 85
+            img.height = 60
+            ws.add_image(img, 'A1')
+        except Exception:
+            pass
+            
+    # Fill background color of A1 to match the black title bar
     ws['A1'].fill = title_fill
-    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
-    ws.row_dimensions[1].height = 45
+    
+    ws.merge_cells('B1:M1')
+    ws['B1'] = "HISTÓRICO CONSOLIDADO DE CHECKLISTS"
+    ws['B1'].font = title_font
+    ws['B1'].fill = title_fill
+    ws['B1'].alignment = Alignment(horizontal='center', vertical='center')
+    
+    # Ensure background of merged title cells is filled
+    for col_char in ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M']:
+        ws[f'{col_char}1'].fill = title_fill
     
     # Header columns
-    headers = ["ID", "Data Criação", "Máquina", "Inspetor", "Co-Inspetor", "Líder", "Status", "Não Conformidades", "Histórico de Pausas", "Observações Gerais"]
+    headers = [
+        "ID", "Data Criação", "Máquina", "Inspetor", "Co-Inspetor", "Líder", 
+        "Status", "Não Conformidades", "Histórico de Pausas", "Observações Gerais",
+        "Status da Auditoria", "Auditor Responsável", "Observações da Auditoria"
+    ]
     for col_idx, h in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col_idx, value=h)
         cell.font = header_font
         cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center' if col_idx in [1, 2, 6] else 'left', vertical='center')
+        cell.alignment = Alignment(horizontal='center' if col_idx in [1, 2, 7, 11] else 'left', vertical='center')
         cell.border = thin_border
     ws.row_dimensions[3].height = 25
     
@@ -1037,6 +1112,10 @@ def export_dashboard_excel(request):
             reason = log.pause_reason or "Sem motivo"
             pause_details.append(f"[{dt_str}] {reason}")
         pause_history_str = " | ".join(pause_details) if pause_details else "Nenhuma"
+
+        # Auditor notes summary across all divergent items
+        div_items = s.items.filter(auditor_is_divergent=True)
+        div_notes = ", ".join([f"{item.item_name}: {item.auditor_observation}" for item in div_items]) if div_items.exists() else "-"
  
         ws.cell(row=current_row, column=1, value=s.id).alignment = Alignment(horizontal='center')
         ws.cell(row=current_row, column=2, value=s.created_at.astimezone().strftime("%d/%m/%Y %H:%M")).alignment = Alignment(horizontal='center')
@@ -1048,8 +1127,11 @@ def export_dashboard_excel(request):
         ws.cell(row=current_row, column=8, value=nc_summary)
         ws.cell(row=current_row, column=9, value=pause_history_str)
         ws.cell(row=current_row, column=10, value=s.general_observations or "")
+        ws.cell(row=current_row, column=11, value=s.get_audit_status_display())
+        ws.cell(row=current_row, column=12, value=s.audited_by.username if s.audited_by else "-")
+        ws.cell(row=current_row, column=13, value=div_notes)
         
-        for col in range(1, 11):
+        for col in range(1, 14):
             cell = ws.cell(row=current_row, column=col)
             cell.font = cell_font
             cell.border = thin_border
@@ -1068,6 +1150,9 @@ def export_dashboard_excel(request):
     ws.column_dimensions['H'].width = 60
     ws.column_dimensions['I'].width = 50
     ws.column_dimensions['J'].width = 40
+    ws.column_dimensions['K'].width = 25
+    ws.column_dimensions['L'].width = 25
+    ws.column_dimensions['M'].width = 60
     
     output = io.BytesIO()
     wb.save(output)
@@ -1133,3 +1218,149 @@ def timeout_pause_checklist(request):
         })
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+# =====================================================================
+# AUDITOR WORKFLOW VIEWS
+# =====================================================================
+
+@login_required
+@auditor_or_management_required
+def auditor_queue(request):
+    data_inicio_str = request.GET.get('data_inicio', '')
+    data_fim_str = request.GET.get('data_fim', '')
+    maquina_id = request.GET.get('maquina', '')
+    inspector_id = request.GET.get('inspector', '')
+    status_filter = request.GET.get('status_filter', '')
+    audit_status_filter = request.GET.get('audit_status_filter', '')
+
+    sessions = ChecklistSession.objects.all().select_related('machine', 'inspector', 'co_inspector', 'leader', 'audited_by').order_by('-created_at')
+
+    if data_inicio_str:
+        try:
+            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+            dt_inicio = timezone.make_aware(datetime.combine(data_inicio, dt_time.min))
+            sessions = sessions.filter(created_at__gte=dt_inicio)
+        except ValueError:
+            pass
+
+    if data_fim_str:
+        try:
+            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+            dt_fim = timezone.make_aware(datetime.combine(data_fim, dt_time.max))
+            sessions = sessions.filter(created_at__lte=dt_fim)
+        except ValueError:
+            pass
+
+    if maquina_id:
+        sessions = sessions.filter(machine_id=maquina_id)
+    if inspector_id:
+        sessions = sessions.filter(inspector_id=inspector_id)
+    if status_filter:
+        sessions = sessions.filter(status=status_filter)
+    if audit_status_filter:
+        sessions = sessions.filter(audit_status=audit_status_filter)
+
+    machines = Machine.objects.all().order_by('name')
+    inspectors = User.objects.filter(is_active=True).exclude(specialty='Lider').order_by('first_name', 'username')
+
+    for s in sessions:
+        nc_items = s.items.filter(status='NC')
+        s.nc_list = [item.item_name for item in nc_items]
+        s.nc_summary = ", ".join(s.nc_list) if s.nc_list else "Nenhuma"
+
+    return render(request, 'core/auditor_queue.html', {
+        'sessions': sessions,
+        'machines': machines,
+        'inspectors': inspectors,
+        'data_inicio': data_inicio_str,
+        'data_fim': data_fim_str,
+        'maquina_id': maquina_id,
+        'inspector_id': inspector_id,
+        'status_filter': status_filter,
+        'audit_status_filter': audit_status_filter,
+    })
+
+@login_required
+@auditor_or_management_required
+def checklist_audit(request, session_id):
+    session = get_object_or_404(ChecklistSession, id=session_id)
+    items = session.items.all().order_by('id')
+    
+    sections_map = {
+        'HIDRAULICA': 'Hidráulica (Mecânico)',
+        'PNEUMATICA': 'Pneumática (Mecânico)',
+        'SISTEMA_VULCANIZACAO': 'Sistema de Vulcanização (Mecânico)',
+        'SISTEMA_VAPOR': 'Sistema de Vapor (Mecânico)',
+        'ESTRUTURA': 'Estrutura (Mecânico)',
+        'ELETRICA': 'Elétrica (Eletricista)',
+    }
+
+    if request.method == 'POST':
+        errors = []
+        items_to_save = []
+        has_divergences = False
+
+        for item in items:
+            is_divergent = request.POST.get(f'divergent_{item.id}') in ['true', 'on']
+            observation = request.POST.get(f'observation_{item.id}', '').strip()
+
+            if is_divergent:
+                has_divergences = True
+                if not observation:
+                    errors.append(f"O item '{item.item_name}' ({sections_map.get(item.section)}) foi marcado como divergente e exige uma observação do auditor.")
+
+            item.auditor_is_divergent = is_divergent
+            item.auditor_observation = observation
+            items_to_save.append(item)
+
+        if errors:
+            grouped_items = {}
+            for section_code, section_name in sections_map.items():
+                grouped_items[section_code] = {
+                    'name': section_name,
+                    'items': items.filter(section=section_code)
+                }
+            return render(request, 'core/checklist_audit.html', {
+                'session': session,
+                'grouped_items': grouped_items,
+                'errors': errors,
+            })
+
+        with transaction.atomic():
+            for item in items_to_save:
+                item.save()
+
+            session.audit_status = 'AUDITADO_COM_DIVERGENCIA' if has_divergences else 'AUDITADO_CONFORME'
+            session.audited_by = request.user
+            session.audited_at = timezone.now()
+            session.save()
+
+        messages.success(request, f"Auditoria do checklist #{session.id} finalizada com sucesso!")
+        return redirect('auditor_queue')
+
+    grouped_items = {}
+    for section_code, section_name in sections_map.items():
+        grouped_items[section_code] = {
+            'name': section_name,
+            'items': items.filter(section=section_code)
+        }
+
+    return render(request, 'core/checklist_audit.html', {
+        'session': session,
+        'grouped_items': grouped_items,
+    })
+
+@login_required
+@auditor_or_management_required
+def auditor_history(request):
+    sessions = ChecklistSession.objects.exclude(audit_status='NAO_AUDITADO').select_related('machine', 'inspector', 'co_inspector', 'leader', 'audited_by').order_by('-audited_at')
+
+    for s in sessions:
+        div_items = s.items.filter(auditor_is_divergent=True)
+        s.div_list = [f"{item.item_name}: {item.auditor_observation}" for item in div_items]
+        s.div_summary = "; ".join(s.div_list) if s.div_list else "Nenhuma divergência"
+
+    return render(request, 'core/auditor_history.html', {
+        'sessions': sessions,
+    })

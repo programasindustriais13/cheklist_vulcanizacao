@@ -10,7 +10,7 @@
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <!-- Custom Style -->
-    <link rel="stylesheet" href="{% static 'core/style.css' %}">
+    <link rel="stylesheet" href="{% static 'core/style.css' %}?v=1.0.1">
     {% block extra_head %}{% endblock %}
 
     {% if user.is_authenticated %}
@@ -101,125 +101,178 @@
 </head>
 <body>
 
-    <!-- Main Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom py-3">
-        <div class="container">
-            <a class="navbar-brand d-flex align-items-center" href="{% url 'dashboard' %}">
-                <i class="bi bi-check2-square text-primary me-2 fs-3"></i>
-                <span>CHECKLIST SYSTEM</span>
-            </a>
+<div class="{% if user.is_authenticated %}d-flex flex-column flex-md-row min-vh-100 w-100{% else %}d-flex flex-column min-vh-100 w-100{% endif %}">
+    
+    {% if user.is_authenticated %}
+    <!-- Mobile Floating Menu Button -->
+    <button class="btn mobile-menu-trigger d-md-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu">
+        <i class="bi bi-list"></i>
+    </button>
+
+    <!-- Mobile Top Header Bar -->
+    <div class="d-md-none bg-black text-white p-3 d-flex align-items-center justify-content-center border-bottom border-dark" style="z-index: 1020; width: 100%;">
+        <div class="d-flex align-items-center gap-2">
+            <img src="/media/Untitled-2.png" alt="Logo Pneus Freedom" height="30">
+            <span class="fw-bold text-white fs-6">Pneus Freedom</span>
+        </div>
+    </div>
+    
+    <!-- Sidebar / Offcanvas navigation (hidden on mobile, visible on desktop) -->
+    <div class="offcanvas-md offcanvas-start bg-sidebar text-white border-end border-dark flex-shrink-0 sidebar-fixed-desktop" tabindex="-1" id="sidebarMenu" aria-labelledby="sidebarMenuLabel" style="width: 280px;">
+        <div class="offcanvas-header bg-black border-bottom border-dark px-4 py-3">
+            <h5 class="offcanvas-title d-flex align-items-center gap-2" id="sidebarMenuLabel">
+                <img src="/media/Untitled-2.png" alt="Logo Pneus Freedom" height="32">
+                <span class="text-white fw-bold">Pneus Freedom</span>
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebarMenu" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body d-flex flex-column p-0 h-100">
+            <!-- Brand header (Desktop only) -->
+            <div class="d-none d-md-flex align-items-center justify-content-between p-4 sidebar-header-brand w-100">
+                <div class="d-flex align-items-center gap-2">
+                    <img src="/media/Untitled-2.png" alt="Logo Pneus Freedom" height="40">
+                    <div>
+                        <h5 class="m-0 text-white fw-bold">Pneus Freedom</h5>
+                        <span class="text-muted small" style="font-size: 0.8rem;">Checklist Industrial</span>
+                    </div>
+                </div>
+                <!-- Desktop Sidebar Menu Button (Aesthetic / Separated from Logo) -->
+                <button class="btn desktop-menu-trigger" type="button" aria-label="Menu">
+                    <i class="bi bi-list"></i>
+                </button>
+            </div>
             
-            {% if user.is_authenticated %}
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active text-primary fw-bold{% endif %}" href="{% url 'dashboard' %}">
-                            <i class="bi bi-house-door me-1"></i> Início
-                        </a>
-                    </li>
-                    {% if user.is_director or user.is_analyst or user.is_superuser %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'analytical_dashboard' %}active text-primary fw-bold{% endif %}" href="{% url 'analytical_dashboard' %}">
-                            <i class="bi bi-bar-chart-line me-1"></i> Dashboard Analítico
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'machines' in request.path %}active text-primary fw-bold{% endif %}" href="{% url 'machine_list' %}">
-                            <i class="bi bi-gear me-1"></i> Máquinas
-                        </a>
-                    </li>
-                    {% endif %}
-                </ul>
+            <!-- User Info Panel -->
+            <div class="p-3 mx-3 my-3 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-10">
                 <div class="d-flex align-items-center">
-                    {% if user.can_create_checklist %}
-                    <a href="{% url 'checklist_start' %}" class="btn btn-primary-custom me-3">
-                        <i class="bi bi-plus-circle me-1"></i> Novo Checklist
-                    </a>
-                    {% endif %}
-                    
-                    {% if user.is_director or user.is_analyst or user.is_superuser %}
-                    <a href="{% url 'user_approval_list' %}" class="btn btn-outline-primary me-3">
-                        <i class="bi bi-people-fill me-1"></i> Aprovar Usuários
-                    </a>
-                    {% endif %}
-                    
-                    <div class="dropdown">
-                        <button class="btn btn-link text-decoration-none dropdown-toggle text-dark fw-semibold p-0 d-flex align-items-center" type="button" id="userMenuDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px;">
-                                {{ user.username|slice:":1"|upper }}
-                            </div>
-                            <div>
-                                <div class="text-start" style="font-size: 0.85rem; line-height: 1.2;">
-                                    {{ user.username }}
-                                </div>
-                                <div class="text-muted text-start" style="font-size: 0.7rem;">
-                                    {{ user.specialty }}
-                                </div>
-                            </div>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2" aria-labelledby="userMenuDropdown">
-                            <li><h6 class="dropdown-header">Conectado como {{ user.username }}</h6></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <form action="{% url 'logout' %}" method="post" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="dropdown-item text-danger d-flex align-items-center">
-                                        <i class="bi bi-box-arrow-right me-2"></i> Sair
-                                    </button>
-                                </form>
-                            </li>
-                        </ul>
+                    <div class="bg-primary text-dark rounded-circle d-flex align-items-center justify-content-center me-3 fw-bold fs-5" style="width: 40px; height: 40px; min-width: 40px;">
+                        {{ user.username|slice:":1"|upper }}
+                    </div>
+                    <div class="overflow-hidden">
+                        <div class="fw-bold text-white text-truncate" title="{{ user.username }}">{{ user.username }}</div>
+                        <div class="text-secondary small text-truncate" style="font-size: 0.75rem;">{{ user.specialty }}</div>
                     </div>
                 </div>
             </div>
-            {% else %}
+            
+            <!-- Navigation Links -->
+            <div class="px-3 py-2 flex-grow-1 sidebar-nav">
+                <span class="text-uppercase text-secondary fw-bold px-3 d-block mb-2" style="font-size: 0.7rem; letter-spacing: 1px;">Menu</span>
+                <nav class="nav flex-column gap-1">
+                    {% if user.specialty != 'Auditor' %}
+                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                        <i class="bi bi-house-door"></i> <span>Início</span>
+                    </a>
+                    {% endif %}
+                    
+                    {% if user.is_director or user.is_analyst or user.is_superuser %}
+                    <a class="nav-link {% if request.resolver_match.url_name == 'analytical_dashboard' %}active{% endif %}" href="{% url 'analytical_dashboard' %}">
+                        <i class="bi bi-bar-chart-line"></i> <span>Dashboard Analítico</span>
+                    </a>
+                    <a class="nav-link {% if 'machines' in request.path %}active{% endif %}" href="{% url 'machine_list' %}">
+                        <i class="bi bi-gear"></i> <span>Máquinas</span>
+                    </a>
+                    {% endif %}
+
+                    {% if user.specialty == 'Auditor' or user.is_director or user.is_analyst or user.is_superuser %}
+                    <span class="text-uppercase text-secondary fw-bold px-3 d-block mt-3 mb-2" style="font-size: 0.7rem; letter-spacing: 1px;">Auditoria</span>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'auditor_queue' %}active{% endif %}" href="{% url 'auditor_queue' %}">
+                        <i class="bi bi-list-check"></i> <span>Fila de Auditoria</span>
+                    </a>
+                    <a class="nav-link {% if request.resolver_match.url_name == 'auditor_history' %}active{% endif %}" href="{% url 'auditor_history' %}">
+                        <i class="bi bi-clock-history"></i> <span>Histórico</span>
+                    </a>
+                    {% endif %}
+                </nav>
+                
+                <!-- Quick Actions / Permissions -->
+                {% if user.can_create_checklist or user.is_director or user.is_analyst or user.is_superuser %}
+                <span class="text-uppercase text-secondary fw-bold px-3 d-block mt-3 mb-2" style="font-size: 0.7rem; letter-spacing: 1px;">Ações</span>
+                <div class="px-2 d-flex flex-column gap-2">
+                    {% if user.can_create_checklist %}
+                    <a href="{% url 'checklist_start' %}" class="btn btn-primary-custom w-100 text-start py-2">
+                        <i class="bi bi-plus-circle me-2"></i> Novo Checklist
+                    </a>
+                    {% endif %}
+                    
+                    {% if user.is_director or user.is_analyst or user.is_superuser %}
+                    <a href="{% url 'user_approval_list' %}" class="btn btn-outline-primary w-100 text-start py-2">
+                        <i class="bi bi-people-fill me-2"></i> Aprovar Usuários
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Sidebar Footer / Logout -->
+            <div class="p-3 border-top border-secondary border-opacity-10 mt-auto bg-black bg-opacity-30">
+                <form action="{% url 'logout' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2 py-2">
+                        <i class="bi bi-box-arrow-right"></i> Sair do Sistema
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Simple Top Navbar for Unauthenticated screens -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom py-3 w-100">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'login' %}">
+                <img src="/media/Untitled-1.png" alt="Logo Pneus Freedom" height="36">
+                <span class="fw-bold" style="color: #000000;">PNEUS FREEDOM</span>
+            </a>
             <div class="d-flex">
                 <a href="{% url 'login' %}" class="btn btn-secondary-custom me-2">Entrar</a>
                 <a href="{% url 'register' %}" class="btn btn-primary-custom">Cadastrar-se</a>
             </div>
-            {% endif %}
         </div>
     </nav>
+    {% endif %}
 
-    <!-- Main Container -->
-    <main class="container my-4 flex-grow-1">
-        <!-- Message System Notifications -->
-        {% if messages %}
-        <div class="row">
-            <div class="col-12">
-                {% for message in messages %}
-                <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% else %}success{% endif %} alert-dismissible fade show border-0 shadow-sm rounded-4 mb-3 animate-fade-in" role="alert">
-                    <div class="d-flex align-items-center">
-                        {% if message.tags == 'error' %}
-                        <i class="bi bi-x-circle-fill me-2 fs-5"></i>
-                        {% elif message.tags == 'warning' %}
-                        <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
-                        {% else %}
-                        <i class="bi bi-check-circle-fill me-2 fs-5"></i>
-                        {% endif %}
-                        <div>
-                            {{ message }}
+    <!-- Main Content Area Wrapper -->
+    <div class="{% if user.is_authenticated %}d-flex flex-column flex-grow-1 min-vh-100 overflow-auto bg-light main-content-wrapper{% else %}flex-grow-1 d-flex flex-column bg-light{% endif %}">
+        <main class="{% if user.is_authenticated %}container-fluid px-md-4 py-4{% else %}container my-5 d-flex align-items-center justify-content-center{% endif %} flex-grow-1">
+            <div class="w-100">
+                <!-- Message System Notifications -->
+                {% if messages %}
+                <div class="row {% if not user.is_authenticated %}justify-content-center{% endif %}">
+                    <div class="col-12 {% if not user.is_authenticated %}col-md-8{% endif %}">
+                        {% for message in messages %}
+                        <div class="alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% else %}success{% endif %} alert-dismissible fade show border-0 shadow-sm rounded-4 mb-3 animate-fade-in" role="alert">
+                            <div class="d-flex align-items-center">
+                                {% if message.tags == 'error' %}
+                                <i class="bi bi-x-circle-fill me-2 fs-5"></i>
+                                {% elif message.tags == 'warning' %}
+                                <i class="bi bi-exclamation-triangle-fill me-2 fs-5"></i>
+                                {% else %}
+                                <i class="bi bi-check-circle-fill me-2 fs-5"></i>
+                                {% endif %}
+                                <div>
+                                    {{ message }}
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
+                        {% endfor %}
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-                {% endfor %}
+                {% endif %}
+                
+                {% block content %}{% endblock %}
             </div>
-        </div>
-        {% endif %}
+        </main>
+        
+        <!-- Branded Footer -->
+        <footer class="bg-white border-top py-3 mt-auto">
+            <div class="container{% if user.is_authenticated %}-fluid px-md-4{% endif %} text-center text-muted" style="font-size: 0.85rem;">
+                <span>&copy; 2026 Checklist System. Desenvolvido para Controle Industrial e Shifts-Start.</span>
+            </div>
+        </footer>
+    </div>
 
-        {% block content %}{% endblock %}
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-white border-top py-3 mt-auto">
-        <div class="container text-center text-muted" style="font-size: 0.85rem;">
-            <span>&copy; 2026 Checklist System. Desenvolvido para Controle Industrial e Shifts-Start.</span>
-        </div>
-    </footer>
+</div>
 
     <!-- Bootstrap 5 Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

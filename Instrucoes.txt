@@ -285,3 +285,159 @@ Resumo das alterações:
    - Adicionados testes automatizados cobrindo o relacionamento simétrico no banco, preenchimento automático do co-inspetor, isolamento de visualização de QuerySet de acordo com o perfil/dupla, permissão de edição para co-inspetores (e proibição para terceiros) e exportações de Excel.
    - Testes automatizados: 21/21 OK.
 
+
+================================================================================
+ALTERAÇÃO: Criação do Perfil de Auditor e Camada de Auditoria Gerencial
+Data: 2026-06-30
+================================================================================
+
+Arquivos alterados/criados:
+- core/models.py
+- core/views.py
+- core/urls.py
+- core/templates/core/base.html
+- core/templates/core/auditor_queue.html [NEW]
+- core/templates/core/checklist_audit.html [NEW]
+- core/templates/core/auditor_history.html [NEW]
+- core/tests.py
+- core/migrations/0007_checklistitemvalue_auditor_is_divergent_and_more.py [NEW]
+
+Resumo das alterações:
+
+1. BANCO DE DADOS (MODELS & MIGRATIONS):
+   - Adicionada especialidade/perfil 'Auditor' no model User.
+   - Adicionados campos `audit_status`, `audited_by` (FK para User) e `audited_at` (DateTimeField) no model ChecklistSession.
+   - Adicionados campos `auditor_is_divergent` (BooleanField) e `auditor_observation` (TextField) no model ChecklistItemValue.
+   - Gerada e aplicada migration incremental (`0007_checklistitemvalue_auditor_is_divergent_and_more.py`).
+
+2. RESTRIÇÕES DE ACESSO (RBAC & DECORATORS):
+   - Criado decorator `auditor_or_management_required` restrito para Auditores, Analistas, Diretores e Superusers.
+   - Atualizada view `dashboard` para redirecionar usuários com specialty 'Auditor' diretamente para `/auditor/queue/`.
+   - Bloqueado o Auditor de acessar rotas restritas de máquinas, criação de checklists e aprovação de usuários.
+   - Bloqueado o acesso de técnicos e líderes às telas de auditoria (Fila geral, Execução e Histórico).
+
+3. TELAS DA AUDITORIA (VIEWS E TEMPLATES):
+   - `auditor_queue`: Fila geral exibindo todos os checklists do sistema, com filtros avançados por Data, Máquina, Status operacional e Técnico.
+   - `checklist_audit`: Tela com dados originais em somente leitura. Permite ao Auditor apontar divergências em cada item com observação obrigatória integrada via JavaScript e validada no backend.
+   - `auditor_history`: Histórico contendo os checklists já auditados e o resumo das divergências registradas.
+
+4. EXPORTAÇÃO EXCEL ATUALIZADA (VIEWS):
+   - `export_checklist_excel`: Exibe os metadados de auditoria e colunas "Divergência (Auditor)" e "Observação (Auditor)".
+   - `export_dashboard_excel`: Inclui colunas "Status da Auditoria", "Auditor Responsável" e "Observações da Auditoria" no relatório consolidado.
+
+5. TESTES E VALIDAÇÃO:
+   - Adicionados testes automatizados cobrindo o controle de acessos do Auditor, isolamento de rotas e preenchimento de campos obrigatórios.
+
+
+================================================================================
+ALTERAÇÃO: Refatoração de Layout (Sidebar) e Identidade Visual (Pneus Freedom)
+Data: 2026-06-30
+================================================================================
+
+Arquivos alterados:
+- checklist_system/settings.py
+- checklist_system/urls.py
+- core/static/core/style.css
+- core/templates/core/base.html
+- core/templates/core/login.html
+- core/views.py
+- core/tests.py
+
+Resumo das alterações:
+
+1. CONFIGURAÇÃO DE MÍDIA (BACKEND):
+   - Adicionada configuração de MEDIA_URL e MEDIA_ROOT no settings.py.
+   - Adicionado roteamento re_path para servir arquivos de mídia de forma incondicional em urls.py, usando django.views.static.serve.
+
+2. PALETA DE CORES CORPORATIVA E CSS (FRONTEND):
+   - Atualizados estilos globais no style.css para usar a paleta corporativa da Pneus Freedom (Amarelo #eac532 como primária e tons escuros/preto como secundária).
+   - Inseridas classes CSS customizadas para Sidebar responsiva (incluindo estados hover, links ativos, e table headers com fundo amarelo e texto preto para legibilidade).
+
+3. MENU DE NAVEGAÇÃO LATERAL (SIDEBAR):
+   - Substituída a barra de navegação superior (navbar) em base.html por uma barra lateral (Sidebar) esquerda integrada usando offcanvas responsivo do Bootstrap 5.
+   - A Sidebar renderiza estaticamente em telas grandes (Desktop) e se transforma em menu hambúrguer com gaveta offcanvas em smartphones/tablets em modo retrato.
+   - Links e acessos configurados dinamicamente com base nas permissões e especialidades do usuário (RBAC).
+
+4. INTEGRAÇÃO DE LOGOS E DESIGN CORPORATIVO:
+   - Tela de login atualizada para renderizar a logomarca preta (Untitled-1.png) centralizada acima do formulário de acesso.
+   - Sidebar configurada com a logomarca amarela/dourada (Untitled-2.png) no topo sob fundo escuro.
+   - Atualizadas as exportações em Excel (export_checklist_excel e export_dashboard_excel) para incluir a logo da empresa (Untitled-2.png) na célula A1, definir altura do cabeçalho de 60px e aplicar o design visual (cabeçalho preto com título amarelo e colunas com fundo amarelo e texto preto).
+
+5. AUTOMATIZAÇÃO DE TESTES (QA):
+   - Adicionados testes automatizados test_media_urls_serving (validação do carregamento de logos) e test_excel_exports_branding_and_logos (validação das saídas Excel com as formatações de logo/células).
+   - Todos os 26 testes da aplicação passam com sucesso (26/26 OK).
+
+
+================================================================================
+ALTERAÇÃO: Correções de Usabilidade no Sidebar (Desktop e Mobile)
+Data: 2026-06-30
+================================================================================
+
+Arquivos alterados:
+- core/templates/core/base.html
+- core/static/core/style.css
+
+Resumo das alterações:
+
+1. CORREÇÃO DA ALTURA E SAIR DO SIDEBAR (DESKTOP):
+   - Sidebar configurada com altura fixa (100vh) e fixada à esquerda (position: fixed) usando a classe `.sidebar-fixed-desktop`.
+   - Adicionada rolagem vertical isolada (overflow-y: auto) para a lista de navegação `.sidebar-nav`, permitindo que os links rolem independentemente se necessário.
+   - O rodapé da sidebar contendo o botão "Sair do Sistema" foi fixado no canto inferior (usando mt-auto em layout flexbox), mantendo-o visível e acessível o tempo todo.
+   - Adicionado deslocamento de margem (margin-left: 280px) para a área de conteúdo principal `.main-content-wrapper` em resoluções >= 768px.
+
+2. BOTÃO FLUTUANTE DE MENU (MOBILE):
+   - O botão que abre a sidebar (hambúrguer) foi retirado da barra do topo e posicionado como um elemento flutuante (position: fixed, top: 8px, left: 15px) na classe `.mobile-menu-trigger`.
+   - Cabeçalho mobile (Mobile Top Header Bar) simplificado, mantendo apenas a logomarca e título centralizados.
+   - Adicionado z-index elevado (1050) e semi-transparência (opacity: 0.6) para evitar bloqueio visual, com efeito de transição de opacidade total (1.0) e inversão de cores no hover/touch/focus.
+
+3. TESTES E VALIDAÇÃO (QA):
+   - Execução completa da suite de testes automatizados com sucesso (26/26 OK).
+
+
+================================================================================
+ALTERAÇÃO: Correção de Layout - Sobreposição do Botão e Logo no Sidebar (Desktop)
+Data: 2026-06-30
+================================================================================
+
+Arquivos alterados:
+- core/templates/core/base.html
+- core/static/core/style.css
+
+Resumo das alterações:
+
+1. CORREÇÃO DA VISIBILIDADE DO BOTÃO DE MENU (DESKTOP):
+   - Ocultado o botão flutuante `.mobile-menu-trigger` em telas desktop (resoluções >= 768px) no CSS via `@media (min-width: 768px) { .mobile-menu-trigger { display: none !important; } }` para corrigir o bug de sobreposição da logo.
+   - Reestruturado o cabeçalho do sidebar desktop (`sidebar-header-brand`) em base.html para utilizar Flexbox (`d-flex justify-content-between align-items-center`) e adicionado o botão de menu (hambúrguer) lado a lado com a logo e nome da marca.
+   - Adicionada estilização e animação de hover para o novo botão de menu desktop.
+
+2. TESTES E VALIDAÇÃO (QA):
+   - Suite de testes Django executada e todos os 26 testes passaram com sucesso (26/26 OK).
+
+
+================================================================================
+ALTERAÇÃO: Reposicionamento do Botão de Menu e Ocultação do Trigger Mobile no Desktop
+Data: 2026-06-30
+================================================================================
+
+Arquivos alterados:
+- core/templates/core/base.html
+- core/static/core/style.css
+
+Resumo das alterações:
+
+1. OCULTAÇÃO DO TRIGGER MOBILE NO DESKTOP:
+   - Isolados os estilos de `.mobile-menu-trigger` dentro de uma media query `@media (max-width: 767.98px)` no arquivo `style.css`, garantindo que o botão flutuante redondo só apareça em dispositivos móveis e seja ocultado no Desktop.
+   - Adicionada a tag de cache buster `?v=1.0.1` ao stylesheet de `style.css` no template `base.html` para forçar o recarregamento dos estilos modificados pelo navegador.
+
+2. REPOSICIONAMENTO E ESTILIZAÇÃO DO BOTÃO DE MENU (DESKTOP):
+   - Mapeados e unificados os estilos do botão hambúrguer no Desktop dentro de `.desktop-menu-trigger` em `style.css` (para telas >= 768px). Ele agora exibe o mesmo formato circular premium (fundo preto, borda e ícone amarelos, transição suave de opacidade e hover amarelo com ícone preto).
+   - O botão circular foi movido para o canto superior direito da sidebar no Desktop, ocupando o lugar do ícone hambúrguer solto secundário, liberando o canto esquerdo da sidebar para a logomarca da Pneus Freedom, eliminando sobreposições.
+   - Limpadas as classes utilitárias e estilos inline obsoletos do botão e ícone no HTML de `base.html`.
+
+3. TESTES E VALIDAÇÃO:
+   - Validação automatizada realizada com sucesso (26/26 testes Django aprovados).
+   - Validação visual realizada no Desktop e no Mobile via subagente de navegação para certificar de que não houve regressões responsivas no Mobile.
+
+
+
+

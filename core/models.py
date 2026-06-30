@@ -9,6 +9,7 @@ class User(AbstractUser):
         ('Analista', 'Analista'),
         ('Diretor', 'Diretor'),
         ('Lider', 'Lider'),
+        ('Auditor', 'Auditor'),
     ]
     specialty = models.CharField(max_length=50, choices=SPECIALTY_CHOICES, verbose_name='Especialidade')
     partner_user = models.ForeignKey(
@@ -37,12 +38,16 @@ class User(AbstractUser):
         return self.specialty == 'Lider'
 
     @property
+    def is_auditor(self):
+        return self.specialty == 'Auditor'
+
+    @property
     def can_export_excel(self):
         return self.specialty in ['Diretor', 'Analista'] or self.is_superuser
 
     @property
     def can_create_checklist(self):
-        return self.specialty != 'Lider' or self.is_superuser
+        return (self.specialty not in ['Lider', 'Auditor']) or self.is_superuser
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -91,6 +96,27 @@ class ChecklistSession(models.Model):
         related_name='co_inspections',
         verbose_name='Co-Inspetor'
     )
+    AUDIT_STATUS_CHOICES = [
+        ('NAO_AUDITADO', 'Não Auditado'),
+        ('AUDITADO_CONFORME', 'Auditado - Conforme'),
+        ('AUDITADO_COM_DIVERGENCIA', 'Auditado - Com Divergência'),
+    ]
+    audit_status = models.CharField(
+        max_length=30,
+        choices=AUDIT_STATUS_CHOICES,
+        default='NAO_AUDITADO',
+        verbose_name='Status da Auditoria'
+    )
+    audited_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audited_sessions',
+        verbose_name='Auditado por'
+    )
+    audited_at = models.DateTimeField(null=True, blank=True, verbose_name='Auditado em')
+
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='NOT_STARTED', verbose_name='Status')
     general_observations = models.TextField(null=True, blank=True, verbose_name='Observações Gerais (Estado da Máquina)')
     
@@ -142,6 +168,10 @@ class ChecklistItemValue(models.Model):
     item_name = models.CharField(max_length=255, verbose_name='Nome do Item')
     status = models.CharField(max_length=2, choices=STATUS_CHOICES, null=True, blank=True, verbose_name='Status')
     observations = models.TextField(null=True, blank=True, verbose_name='Observações')
+
+    # Auditor fields
+    auditor_is_divergent = models.BooleanField(default=False, null=True, blank=True, verbose_name='Divergente?')
+    auditor_observation = models.TextField(null=True, blank=True, verbose_name='Observação do Auditor')
 
     def __str__(self):
         return f"{self.section} - {self.item_name}: {self.status or 'Sem resposta'}"

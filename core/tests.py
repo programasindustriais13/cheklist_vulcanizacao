@@ -1,4 +1,4 @@
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from core.models import User, Machine, ChecklistSession, ChecklistItemValue, ChecklistTimelineLog
@@ -863,5 +863,162 @@ class ChecklistSystemTests(TestCase):
         # Consolidated export
         response_cons = self.client.get(reverse('export_dashboard_excel'))
         self.assertEqual(response_cons.status_code, 200)
+
+    def test_auditor_access_control_and_redirects(self):
+        auditor = User.objects.create_user(
+            username='test_auditor',
+            password='testpassword123',
+            specialty='Auditor',
+            is_active=True
+        )
+        self.client.login(username='test_auditor', password='testpassword123')
+        
+        # 1. Accessing '/' (dashboard name) redirects Auditor to auditor_queue
+        response = self.client.get(reverse('dashboard'))
+        self.assertRedirects(response, reverse('auditor_queue'))
+        
+        # 2. Accessing '/dashboard/' (analytical_dashboard) redirects Auditor to auditor_queue
+        response = self.client.get(reverse('analytical_dashboard'))
+        self.assertRedirects(response, reverse('auditor_queue'))
+
+        # 3. Accessing '/machines/' redirects Auditor to auditor_queue
+        response = self.client.get(reverse('machine_list'))
+        self.assertRedirects(response, reverse('auditor_queue'))
+
+        # 4. Accessing '/checklist/start/' redirects Auditor to auditor_queue
+        response = self.client.get(reverse('checklist_start'))
+        self.assertRedirects(response, reverse('auditor_queue'))
+
+        # 5. Accessing '/users/pending/' returns 403 Forbidden
+        response = self.client.get(reverse('user_approval_list'))
+        self.assertEqual(response.status_code, 403)
+
+        # 6. Accessing auditor views returns 200
+        response = self.client.get(reverse('auditor_queue'))
+        self.assertEqual(response.status_code, 200)
+        
+        response = self.client.get(reverse('auditor_history'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_technician_cannot_access_auditor_screens(self):
+        self.client.login(username='test_inspector', password='testpassword123')
+        
+        # 1. Tech cannot view Auditor Queue
+        response = self.client.get(reverse('auditor_queue'))
+        self.assertRedirects(response, reverse('dashboard'))
+        
+        # 2. Tech cannot view Auditor History
+        response = self.client.get(reverse('auditor_history'))
+        self.assertRedirects(response, reverse('dashboard'))
+
+    def test_auditor_checklist_audit_validation_and_saving(self):
+        auditor = User.objects.create_user(
+            username='test_auditor',
+            password='testpassword123',
+            specialty='Auditor',
+            is_active=True
+        )
+        session = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            status='APROVADO',
+            started_at=timezone.now(),
+            completed_at=timezone.now()
+        )
+        item = ChecklistItemValue.objects.create(
+            session=session,
+            section='ELETRICA',
+            item_name='Test auditor item',
+            status='C'
+        )
+        
+        self.client.login(username='test_auditor', password='testpassword123')
+        
+        # 1. Submit divergence toggle = true but NO observation -> Validation fails
+        response = self.client.post(
+            reverse('checklist_audit', kwargs={'session_id': session.id}),
+            {
+                f'divergent_{item.id}': 'on',
+                f'observation_{item.id}': ''
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "exige uma observação do auditor")
+        
+        # Verify nothing was changed in db
+        session.refresh_from_db()
+        self.assertEqual(session.audit_status, 'NAO_AUDITADO')
+        
+        # 2. Submit divergence toggle = true AND observation -> Validation succeeds
+        response = self.client.post(
+            reverse('checklist_audit', kwargs={'session_id': session.id}),
+            {
+                f'divergent_{item.id}': 'on',
+                f'observation_{item.id}': 'Divergencia encontrada'
+            }
+        )
+        self.assertRedirects(response, reverse('auditor_queue'))
+        
+        session.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(session.audit_status, 'AUDITADO_COM_DIVERGENCIA')
+        self.assertEqual(session.audited_by, auditor)
+        self.assertIsNotNone(session.audited_at)
+        self.assertTrue(item.auditor_is_divergent)
+        self.assertEqual(item.auditor_observation, 'Divergencia encontrada')
+        
+        # 3. Submit audit checklist with no divergence -> status becomes AUDITADO_CONFORME
+        response = self.client.post(
+            reverse('checklist_audit', kwargs={'session_id': session.id}),
+            {
+                f'divergent_{item.id}': 'false', # or not checked
+                f'observation_{item.id}': ''
+            }
+        )
+        self.assertRedirects(response, reverse('auditor_queue'))
+        
+        session.refresh_from_db()
+        item.refresh_from_db()
+        self.assertEqual(session.audit_status, 'AUDITADO_CONFORME')
+        self.assertFalse(item.auditor_is_divergent)
+        self.assertEqual(item.auditor_observation, '')
+
+    def test_media_urls_serving(self):
+        response1 = self.client.get('/media/Untitled-1.png')
+        response2 = self.client.get('/media/Untitled-2.png')
+        self.assertEqual(response1.status_code, 200)
+        self.assertEqual(response2.status_code, 200)
+
+    def test_excel_exports_branding_and_logos(self):
+        analyst = User.objects.create_user(
+            username='test_analyst_exporter',
+            password='testpassword123',
+            specialty='Analista',
+            is_active=True
+        )
+        session = ChecklistSession.objects.create(
+            machine=self.machine,
+            leader=self.leader,
+            inspector=self.inspector,
+            status='APROVADO',
+            started_at=timezone.now(),
+            completed_at=timezone.now()
+        )
+        self.client.login(username='test_analyst_exporter', password='testpassword123')
+        
+        # Test individual export
+        url = reverse('export_checklist_excel', kwargs={'session_id': session.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['content-type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        
+        # Test dashboard export
+        url_dash = reverse('export_dashboard_excel')
+        response_dash = self.client.get(url_dash)
+        self.assertEqual(response_dash.status_code, 200)
+        self.assertEqual(response_dash['content-type'], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 
 

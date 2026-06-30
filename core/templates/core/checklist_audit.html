@@ -1,0 +1,192 @@
+{% extends 'core/base.html' %}
+{% block title %}Auditar Checklist #{{ session.id }} - Checklist Industrial{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumbs -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'auditor_queue' %}">Fila de Auditoria</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Auditar Checklist #{{ session.id }}</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="bi bi-shield-check text-primary me-2"></i>Auditoria do Checklist #{{ session.id }}
+            </h2>
+            <p class="text-muted">Revise os registros originais e aponte divergências se necessário.</p>
+        </div>
+    </div>
+
+    <!-- Error Summary Alerts -->
+    {% if errors %}
+    <div class="alert alert-danger border-0 shadow-sm rounded-4 mb-4" role="alert">
+        <div class="d-flex">
+            <i class="bi bi-x-circle-fill me-2 fs-5"></i>
+            <div>
+                <h6 class="alert-heading fw-bold mb-1">Erros de Validação da Auditoria</h6>
+                <ul class="mb-0 ps-3">
+                    {% for error in errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Session Details Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-info-circle me-2 text-primary"></i>Informações Gerais da Inspeção</h5>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <span class="text-muted small fw-semibold d-block">Máquina</span>
+                    <span class="fw-bold text-dark fs-5">{{ session.machine.name }}</span>
+                </div>
+                <div class="col-md-3">
+                    <span class="text-muted small fw-semibold d-block">Inspetor</span>
+                    <span class="fw-semibold text-dark">{{ session.inspector.username }} ({{ session.inspector.specialty }})</span>
+                    {% if session.co_inspector %}
+                    <span class="text-muted small d-block">& {{ session.co_inspector.username }} ({{ session.co_inspector.specialty }})</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    <span class="text-muted small fw-semibold d-block">Líder de Turno</span>
+                    <span class="fw-semibold text-dark">{{ session.leader.get_full_name|default:session.leader.username }}</span>
+                </div>
+                <div class="col-md-3">
+                    <span class="text-muted small fw-semibold d-block">Status Operacional</span>
+                    {% if session.status == 'APROVADO' %}
+                    <span class="badge bg-success-subtle text-success rounded-pill px-3 py-2 small fw-semibold">Aprovado</span>
+                    {% elif session.status == 'AGUARDANDO_LIDER' %}
+                    <span class="badge bg-warning-subtle text-warning rounded-pill px-3 py-2 small fw-semibold">Aguardando Líder</span>
+                    {% elif session.status == 'IN_PROGRESS' %}
+                    <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2 small fw-semibold">Em Andamento</span>
+                    {% elif session.status == 'PAUSED' %}
+                    <span class="badge bg-secondary-subtle text-secondary rounded-pill px-3 py-2 small fw-semibold">Pausado</span>
+                    {% elif session.status == 'REPROVADO_LIDER' %}
+                    <span class="badge bg-danger-subtle text-danger rounded-pill px-3 py-2 small fw-semibold">Reprovado Líder</span>
+                    {% elif session.status == 'REPROVAR_FINAL_REFAZER' %}
+                    <span class="badge bg-dark-subtle text-dark rounded-pill px-3 py-2 small fw-semibold">Reprovado Final</span>
+                    {% else %}
+                    <span class="badge bg-light text-dark border rounded-pill px-3 py-2 small fw-semibold">{{ session.get_status_display }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if session.general_observations %}
+            <hr class="my-3">
+            <div>
+                <span class="text-muted small fw-semibold d-block">Observações Gerais do Técnico</span>
+                <p class="mb-0 text-dark">{{ session.general_observations }}</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Audit Action Form -->
+    <form method="POST" id="auditForm">
+        {% csrf_token %}
+        
+        {% for section_code, section_data in grouped_items.items %}
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-light border-0 py-3 rounded-top-4">
+                <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-tag me-2 text-primary"></i>{{ section_data.name }}</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4 text-muted small fw-semibold text-uppercase" style="width: 40%;">Item</th>
+                                <th class="text-muted small fw-semibold text-uppercase text-center" style="width: 20%;">Marcação Original</th>
+                                <th class="text-muted small fw-semibold text-uppercase" style="width: 40%;">Apontar Divergência</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in section_data.items %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-semibold text-dark">{{ item.item_name }}</div>
+                                    {% if item.observations %}
+                                    <div class="text-muted small mt-1">
+                                        <i class="bi bi-chat-left-text me-1"></i>Obs. do Técnico: {{ item.observations }}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if item.status == 'C' %}
+                                    <span class="badge bg-success-subtle text-success rounded-pill px-3 py-2 fw-semibold">Conforme</span>
+                                    {% elif item.status == 'NC' %}
+                                    <span class="badge bg-danger-subtle text-danger rounded-pill px-3 py-2 fw-semibold">Não Conforme</span>
+                                    {% else %}
+                                    <span class="badge bg-light text-muted border rounded-pill px-3 py-2 fw-semibold">Pendente</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-column gap-2">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input divergence-switch" type="checkbox" 
+                                                   name="divergent_{{ item.id }}" id="switch_{{ item.id }}"
+                                                   data-item-id="{{ item.id }}"
+                                                   {% if item.auditor_is_divergent %}checked{% endif %}>
+                                            <label class="form-check-label fw-semibold text-secondary" for="switch_{{ item.id }}">
+                                                Divergência Identificada
+                                            </label>
+                                        </div>
+                                        <div class="obs-container {% if not item.auditor_is_divergent %}d-none{% endif %}" id="obs_container_{{ item.id }}">
+                                            <textarea name="observation_{{ item.id }}" id="obs_{{ item.id }}"
+                                                      class="form-control rounded-3 py-2 px-3 small border-warning-subtle" 
+                                                      rows="2" placeholder="Observação obrigatória justificando a divergência..."
+                                                      {% if item.auditor_is_divergent %}required{% endif %}>{{ item.auditor_observation|default:'' }}</textarea>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Form Actions -->
+        <div class="d-flex justify-content-between align-items-center mb-5">
+            <a href="{% url 'auditor_queue' %}" class="btn btn-light border rounded-3 px-4 py-2">
+                <i class="bi bi-x-circle me-1"></i>Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary rounded-3 px-5 py-3 fw-bold shadow">
+                <i class="bi bi-check-all me-1 fs-5"></i>Finalizar Auditoria
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const switches = document.querySelectorAll(".divergence-switch");
+    
+    switches.forEach(function(sw) {
+        sw.addEventListener("change", function() {
+            const itemId = this.getAttribute("data-item-id");
+            const container = document.getElementById("obs_container_" + itemId);
+            const textarea = document.getElementById("obs_" + itemId);
+            
+            if (this.checked) {
+                container.classList.remove("d-none");
+                textarea.setAttribute("required", "required");
+                textarea.classList.add("border-warning");
+            } else {
+                container.classList.add("d-none");
+                textarea.removeAttribute("required");
+                textarea.classList.remove("border-warning");
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

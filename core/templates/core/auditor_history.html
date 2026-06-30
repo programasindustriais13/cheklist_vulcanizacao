@@ -1,0 +1,96 @@
+{% extends 'core/base.html' %}
+{% block title %}Histórico de Auditorias - Checklist Industrial{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header Page -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="bi bi-clock-history text-primary me-2"></i>Histórico de Auditorias Realizadas
+            </h2>
+            <p class="text-muted">Registro consolidado de checklists auditados com resumo de divergências e exportações.</p>
+        </div>
+    </div>
+
+    <!-- Table of Audited Checklists -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4 py-3 text-muted fw-semibold small text-uppercase" style="width: 80px;">ID</th>
+                            <th class="py-3 text-muted fw-semibold small text-uppercase">Data Auditoria</th>
+                            <th class="py-3 text-muted fw-semibold small text-uppercase">Máquina</th>
+                            <th class="py-3 text-muted fw-semibold small text-uppercase">Técnico / Líder</th>
+                            <th class="py-3 text-muted fw-semibold small text-uppercase">Auditor Responsável</th>
+                            <th class="py-3 text-muted fw-semibold small text-uppercase">Resultado Auditoria</th>
+                            <th class="py-3 text-muted fw-semibold small text-uppercase" style="width: 250px;">Resumo das Divergências</th>
+                            <th class="py-3 text-muted fw-semibold small text-uppercase text-end pe-4" style="width: 150px;">Relatório</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in sessions %}
+                        <tr class="transition-hover">
+                            <td class="ps-4 fw-bold text-secondary">#{{ s.id }}</td>
+                            <td>
+                                <div class="fw-semibold text-dark">{{ s.audited_at|date:"d/m/Y" }}</div>
+                                <div class="text-muted small">{{ s.audited_at|date:"H:i" }}</div>
+                            </td>
+                            <td class="fw-semibold text-primary-custom">{{ s.machine.name }}</td>
+                            <td>
+                                <div class="fw-semibold text-dark">{{ s.inspector.username }}</div>
+                                <div class="text-muted small">Líder: {{ s.leader.username|default:"-" }}</div>
+                            </td>
+                            <td class="fw-semibold text-dark">
+                                <i class="bi bi-person me-1 text-muted"></i>{{ s.audited_by.username|default:"-" }}
+                            </td>
+                            <td>
+                                {% if s.audit_status == 'AUDITADO_CONFORME' %}
+                                <span class="badge bg-success text-white rounded-pill px-3 py-2 small fw-semibold">
+                                    <i class="bi bi-check-circle me-1"></i>Conforme
+                                </span>
+                                {% elif s.audit_status == 'AUDITADO_COM_DIVERGENCIA' %}
+                                <span class="badge bg-danger text-white rounded-pill px-3 py-2 small fw-semibold">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>Com Divergência
+                                </span>
+                                {% else %}
+                                <span class="badge bg-light text-muted border rounded-pill px-3 py-2 small fw-semibold">{{ s.get_audit_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="text-dark small d-inline-block text-truncate" style="max-width: 240px;" title="{{ s.div_summary }}">
+                                    {{ s.div_summary }}
+                                </span>
+                            </td>
+                            <td class="pe-4 text-end">
+                                <a href="{% url 'export_checklist_excel' session_id=s.id %}" class="btn btn-sm btn-outline-success rounded-pill px-3 py-2 small fw-semibold">
+                                    <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <i class="bi bi-folder-x fs-1 mb-2 d-block"></i>
+                                Nenhuma auditoria realizada no histórico ainda.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .transition-hover {
+        transition: background-color 0.15s ease-in-out;
+    }
+    .transition-hover:hover {
+        background-color: rgba(248, 249, 250, 0.85);
+    }
+</style>
+{% endblock %}

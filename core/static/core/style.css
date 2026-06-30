@@ -2,8 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-    --primary: hsl(210, 80%, 45%);
-    --primary-hover: hsl(210, 80%, 38%);
+    --primary: #eac532;
+    --primary-hover: #d5b329;
     --accent: hsl(145, 63%, 42%);
     --accent-hover: hsl(145, 63%, 35%);
     --danger: hsl(354, 70%, 54%);
@@ -271,5 +271,207 @@ input[type="radio"][value="NC"]:checked + .btn-radio {
     }
     #observationModal .modal-content {
         border-radius: 12px !important;
+    }
+}
+
+/* ===== BRAND IDENTITY & SIDEBAR LAYOUT ===== */
+.bg-sidebar {
+    background-color: #000000 !important;
+}
+
+.sidebar-nav .nav-link {
+    color: #cbd5e1; /* Light grey text */
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.sidebar-nav .nav-link:hover {
+    color: #eac532 !important; /* Yellow text on hover */
+    background-color: #1e1e1e; /* Dark grey hover background */
+    transform: translateX(3px);
+}
+
+.sidebar-nav .nav-link.active {
+    color: #000000 !important; /* Black text on active link */
+    background-color: #eac532 !important; /* Yellow background */
+    font-weight: 700;
+}
+
+.sidebar-header-brand {
+    border-bottom: 1px solid #1e1e1e;
+}
+
+/* Override standard bootstrap primary elements for branding */
+.btn-primary-custom {
+    background-color: #eac532 !important;
+    border-color: #eac532 !important;
+    color: #000000 !important;
+    font-weight: 600 !important;
+}
+
+.btn-primary-custom:hover, .btn-primary-custom:focus {
+    background-color: #d5b329 !important;
+    border-color: #d5b329 !important;
+    color: #000000 !important;
+}
+
+.btn-outline-primary {
+    border-color: #eac532 !important;
+    color: #eac532 !important;
+}
+
+.btn-outline-primary:hover, .btn-outline-primary:focus, .btn-outline-primary:active {
+    background-color: #eac532 !important;
+    color: #000000 !important;
+    border-color: #eac532 !important;
+}
+
+.text-primary {
+    color: #eac532 !important;
+}
+
+/* Custom Table headers with brand colors */
+.table-premium th, .table th, thead th {
+    background-color: #eac532 !important;
+    color: #000000 !important;
+    font-weight: 700 !important;
+    border-bottom: 2px solid #dee2e6 !important;
+}
+
+/* ===== DESKTOP FIXED SIDEBAR LAYOUT ===== */
+@media (min-width: 768px) {
+    .sidebar-fixed-desktop {
+        position: fixed !important;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        height: 100vh !important;
+        z-index: 1030;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow-y: hidden !important; /* Keep sidebar container without scrollbar */
+    }
+    
+    .sidebar-fixed-desktop .offcanvas-body {
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+    
+    .sidebar-nav {
+        overflow-y: auto !important; /* Navigation links scroll independently */
+        flex-grow: 1;
+    }
+    
+    /* Shift main content to the right */
+    .main-content-wrapper {
+        margin-left: 280px !important;
+        width: calc(100% - 280px) !important;
+    }
+
+    /* Hide floating mobile menu on desktop/PC */
+    .mobile-menu-trigger {
+        display: none !important;
+    }
+
+    /* Desktop menu button styling */
+    .desktop-menu-trigger {
+        width: 40px;
+        height: 40px;
+        border-radius: 50% !important;
+        background-color: #000000 !important;
+        border: 2px solid #eac532 !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        color: #eac532 !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        opacity: 0.8;
+        transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        padding: 0 !important;
+        cursor: pointer;
+    }
+    
+    .desktop-menu-trigger:hover {
+        opacity: 1.0;
+        background-color: #eac532 !important;
+        border-color: #eac532 !important;
+        color: #000000 !important;
+        transform: scale(1.05);
+    }
+    
+    .desktop-menu-trigger i {
+        font-size: 1.25rem !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s ease;
+        color: #eac532 !important;
+    }
+    
+    .desktop-menu-trigger:hover i {
+        color: #000000 !important;
+    }
+}
+
+/* Custom scrollbar styling for sidebar navigation */
+.sidebar-nav::-webkit-scrollbar {
+    width: 6px;
+}
+.sidebar-nav::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(234, 197, 50, 0.3);
+    border-radius: 3px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(234, 197, 50, 0.6);
+}
+
+/* ===== MOBILE FLOATING MENU BUTTON ===== */
+@media (max-width: 767.98px) {
+    .mobile-menu-trigger {
+        position: fixed !important;
+        top: 8px;
+        left: 15px;
+        z-index: 1050;
+        width: 45px;
+        height: 45px;
+        border-radius: 50% !important;
+        background-color: #000000 !important;
+        border: 2px solid #eac532 !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        color: #eac532 !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        opacity: 0.6;
+        transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        padding: 0 !important;
+    }
+
+    .mobile-menu-trigger:hover,
+    .mobile-menu-trigger:focus,
+    .mobile-menu-trigger:active {
+        opacity: 1.0;
+        color: #000000 !important;
+        background-color: #eac532 !important;
+        border-color: #eac532 !important;
+        transform: scale(1.05);
+    }
+
+    .mobile-menu-trigger i {
+        font-size: 1.5rem !important;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 }
